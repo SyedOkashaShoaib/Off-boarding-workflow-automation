@@ -42,32 +42,3 @@ def create_Case():
     return render_template('create_case.html', form=form)
 
 
-    # id = db.Column(db.Integer, primary_key = True)
-    # case_number = db.Column(db.String(30), nullable=False, unique=True)
-    # emp_name = db.Column(db.String(70), nullable=False) 
-    # emp_id = db.Column(db.Integer, nullable=False, unique=True)
-    # emp_designation = db.Column(db.String, nullable=False)
-    # emp_department = db.Column(db.String, nullable=False)
-    # last_day = db.Column(db.Date, nullable=False)
-    # line_manager = db.Column(db.String(70), nullable=False)
-    # created_by = db.Column(db.String(70), nullable=False)
-    #    status = db.Column(db.String(30), default='CREATED') #add a check to define the domain of status laterr
-    # created_at = db.Column(db.DateTime(timezone=True), default=lambda:datetime.now(timezone.utc),
-    #                        onupdate=lambda:datetime.now(timezone.utc))
-    #     <p>
-    #     {{ form.emp_name.label }}<br>
-    #     {{ form.emp_name(size=32) }}
-    # </p>
-    # <p>
-    #     {{ form.emp_desig.label }}<br>
-    #     {{ form.emp_desig(size=32) }}
-    # </p>
-    # <p>
-    #     {{ form.emp_dep.label }}<br>
-    #     {{ form.emp_dep(size=32) }}
-    # </p>
-    # <p>
-    #     {{ form.last_date.label }}<br>
-    #     {{ form.last_date }}
-    # </p>
-    # <p>{{ form.submit() }}</p>
