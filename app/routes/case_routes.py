@@ -40,5 +40,3 @@ def create_Case():
         flash("New offloading case created succesfully.")
         #further logic
     return render_template('create_case.html', form=form)
-
-
