@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Create a new offboarding case </h1>
+<form action="" method="post">
+    {{ form.hidden_tag() }}
+    <p>
+        {{ form.emp_name.label }}<br>
+        {{ form.emp_name(size=32) }}
+    </p>
+    <p>
+        {{ form.emp_desig.label }}<br>
+        {{ form.emp_desig(size=32) }}
+    </p>
+    <p>
+        {{ form.emp_dep.label }}<br>
+        {{ form.emp_dep(size=32) }}
+    </p>
+    <p>
+        {{ form.last_date.label }}<br>
+        {{ form.last_date }}
+    </p>
+    <p>{{ form.submit() }}</p>
+</form>
+{% endblock %}
