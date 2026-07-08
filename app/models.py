@@ -26,4 +26,5 @@ class Department(db.Model):
 
 class ChecklistItem(db.Model):
     __tablename__ = 'checklist_item'
+    item_id = db.Column(db.Integer, primary_key=True)
     
