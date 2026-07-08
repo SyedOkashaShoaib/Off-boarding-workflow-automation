@@ -3,11 +3,12 @@ from wtforms import StringField, BooleanField, SubmitField, IntegerField, DateFi
 from wtforms.validators import DataRequired, Length
 
 class Case_Form(FlaskForm):
-    emp_name = StringField('Employee name', validators=[DataRequired(message="Employee name is required")], )
+    emp_name = StringField('Employee name',Length, validators=[DataRequired(message="Employee name is required")] )
     # emp_id = IntegerField('Employe')
     emp_desig = StringField("Employee designation", validators=[DataRequired(message='Employee Designation is required')])
     emp_dep = StringField("EMployee department", validators=[DataRequired(message='Employee department is required')])
     last_date = DateField("Select the employee's last date of work", validators=[DataRequired(message='Last date of working si required')])
+
     submit = SubmitField("Begin Offboarding Process")
 
     # id = db.Column(db.Integer, primary_key = True)
