@@ -18,3 +18,12 @@ class Offboarding_Case(db.Model):
                            onupdate=lambda:datetime.now(timezone.utc))
     
 
+
+class Department(db.Model):
+    __tablename__ = 'department'
+    dep_id= db.Column(db.Integer, primary_key = True)
+    dep_name=db.Column(db.String(70), nullable=False, unique=True)
+
+class ChecklistItem(db.Model):
+    __tablename__ = 'checklist_item'
+    
