@@ -15,6 +15,6 @@ def create_app():
     app.register_blueprint(case_bp, url_prefix='/cases')
     app.register_blueprint(main_bp) 
 
-    # from app.commands import seed_data_command
-    # app.cli.add_command(seed_data_command)
+    from app.commands import seed_data_command
+    app.cli.add_command(seed_data_command)
     return app

@@ -1,7 +1,7 @@
 import click
 from flask.cli import with_appcontext
 
-from app.extensions import db
+from app.extension import db
 from app.models import Department, WorkflowPhase, ChecklistItem
 
 
