@@ -4,13 +4,13 @@ from flask import render_template, redirect, url_for, flash
 from app.forms.offboarding_case import Case_Form
 from app.extension import db
 # from sqlalchemy import select
-from app.models import Offboarding_Case
+from app.models import OffboardingCase
 
 case_bp = Blueprint('cases', __name__)
 main_bp = Blueprint('main', __name__)
 
 def generate_Case_Number():
-    last_id = Offboarding_Case.query.order_by(Offboarding_Case.id.desc()).first()
+    last_id = OffboardingCase.query.order_by(OffboardingCase.id.desc()).first()
     if last_id is None:
         last_id = 1
     else:
@@ -29,7 +29,7 @@ def create_Case():
     form = Case_Form()
     if form.validate_on_submit():
         case_id = generate_Case_Number()
-        new_case = Offboarding_Case(
+        new_case = OffboardingCase(
             case_number=case_id, emp_name = form.emp_name.data,
             emp_id = form.emp_id.data, emp_designation = form.emp_desig.data,
             emp_department = form.emp_dep.data, last_day = form.last_date.data,
@@ -41,7 +41,3 @@ def create_Case():
         #further logic
     return render_template('create_case.html', form=form)
 
-
-@case_bp.route('/workflow/task/<int task_id>')
-def workflow_tasks():
-    pass
