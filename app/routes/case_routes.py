@@ -19,9 +19,9 @@ def generate_Case_Number():
     return f"CASE_{last_id}"
 #figure out the logic of generating case number.
 
-@main_bp.route('/')
-def home():
-    return redirect (url_for('cases.create_Case'))
+# @main_bp.route('/')
+# def home():
+#     return redirect (url_for('cases.create_Case'))
 
 @case_bp.route('/create', 
 methods=['GET', 'POST'])
@@ -40,3 +40,8 @@ def create_Case():
         flash("New offloading case created succesfully.")
         #further logic
     return render_template('create_case.html', form=form)
+
+
+@case_bp.route('/workflow/task/<int task_id>')
+def workflow_tasks():
+    pass
