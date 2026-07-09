@@ -22,9 +22,23 @@ class Offboarding_Case(db.Model):
 class Department(db.Model):
     __tablename__ = 'department'
     dep_id= db.Column(db.Integer, primary_key = True)
-    dep_name=db.Column(db.String(70), nullable=False, unique=True)
+    dep_name=db.Column(db.String(100), nullable=False, unique=True)
+    email = db.Column(db.String(100), nullable=False)
+
 
 class ChecklistItem(db.Model):
     __tablename__ = 'checklist_item'
     item_id = db.Column(db.Integer, primary_key=True)
+    item_text = db.Column(db.String(150), nullable=False)
+    phase_id = db.Column(db.Integer, db.ForeignKey('workflow_phase.phase_id'), nullable=False)
+    display_order = db.Column(db.Integer, nullable=False)
+    phase = db.relationship('WorkflowPhase', back_populates='checklist_items')
     
+class WorkflowPhase(db.Model):
+    __tablename__ = 'workflow_phase'
+    phase_id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    dep_id=db.Column(db.Integer, db.ForeignKey('department.dep_id'), nullable=False)
+    phase_order=db.Column(db.Integer, nullable=False) 
+    checklist_items = db.relationship(ChecklistItem, back_populates='phase', order_by='ChecklistItem.display_order')
+
