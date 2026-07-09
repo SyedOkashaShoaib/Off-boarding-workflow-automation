@@ -1,5 +1,5 @@
 from app.extension import db, migrate
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 class Offboarding_Case(db.Model):
     __tablename__ = 'offboarding_case'
@@ -16,7 +16,7 @@ class Offboarding_Case(db.Model):
     status = db.Column(db.String(30), default='CREATED') #add a check to define the domain of status laterr
     created_at = db.Column(db.DateTime(timezone=True), default=lambda:datetime.now(timezone.utc),
                            onupdate=lambda:datetime.now(timezone.utc))
-    
+    taccsks = db.relationship('WorkflowTask', back_populates='case')
 
 
 class Department(db.Model):
@@ -41,4 +41,18 @@ class WorkflowPhase(db.Model):
     dep_id=db.Column(db.Integer, db.ForeignKey('department.dep_id'), nullable=False)
     phase_order=db.Column(db.Integer, nullable=False) 
     checklist_items = db.relationship(ChecklistItem, back_populates='phase', order_by='ChecklistItem.display_order')
+
+
+class WorkflowTask(db.Model):
+    __tablename__ = 'workflow_tasks'
+    task_id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('offboarding_case.id'), nullable=False)
+    phase_id = db.Column(db.Integer, db.ForeignKey('workflow_phase.phase_id'), nullable=False)
+    assigned_to_email = db.Column(db.String(70), nullable=False)
+    status = db.Column(db.String(50), nullable=False, default='PENDING')
+    assigned_at = db.Column(db.DateTime(timezone=True))
+    due_at = db.Column(db.DateTime(timezone=True), default=lambda:datetime.now(timezone.utc) +  timedelta(days=7))
+    submitted_at = db.Column(db.DateTime(timezone=True))
+    case = db.relationship('Offboarding_Case', back_populates='tasks')
+
 
