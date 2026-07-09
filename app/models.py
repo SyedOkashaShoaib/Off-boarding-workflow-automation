@@ -55,4 +55,15 @@ class WorkflowTask(db.Model):
     submitted_at = db.Column(db.DateTime(timezone=True))
     case = db.relationship('Offboarding_Case', back_populates='tasks')
 
+class CheckListResponse(db.Model):
+    __tablename__ = 'checklistresponse'
+    response_id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('offboarding_case.id'), nullable=False, unique=True)
+    workflow_task_id = db.Column(db.Integer, db.ForeignKey('workflow_tasks.task_id'), nullable=False, unique=True)
+    checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_item.item_id'), nullable=False)
+    response_status = db.Column(db.String, nullable=False)
+    not_applic_reason = db.Column(db.Text, nullable=True )
+    responded_at = db.Column(db.DateTime(timezone=True), default=lambda:datetime.now(timezone.utc), nullable=False)
+
+
 
