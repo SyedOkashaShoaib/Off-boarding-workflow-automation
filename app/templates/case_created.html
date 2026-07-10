@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<section class="page-header">
+    <h1>Offboarding Case Information</h1>
+</section>
+
+<div class="confirmation-card">
+    <div class="confirmation-heading">
+        <h2>{{ case.case_number }}</h2>
+        <span class="status-badge status-success">
+            {{ case.status }}
+        </span>
+    </div>
+
+    <div class="details-grid">
+        <div class="detail-item">
+            <span class="detail-label">Employee Name</span>
+            <span class="detail-value">{{ case.employee_name }}</span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Employee ID</span>
+            <span class="detail-value">{{ case.employee_id }}</span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Designation</span>
+            <span class="detail-value">{{ case.designation }}</span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Employee Department</span>
+            <span class="detail-value">{{ case.department }}</span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Last Working Day</span>
+            <span class="detail-value">
+                {{ case.last_working_day.strftime("%d %B %Y") }}
+            </span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Line Manager</span>
+            <span class="detail-value">{{ case.line_manager }}</span>
+        </div>
+    </div>
+</div>
+
+<div class="confirmation-card">
+    <h2>Initial Workflow Assignment</h2>
+
+    <div class="details-grid">
+        <div class="detail-item">
+            <span class="detail-label">Current Phase</span>
+            <span class="detail-value">{{ task.phase.name }}</span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Assigned Department</span>
+            <span class="detail-value">
+                {{ task.phase.department.name }}
+            </span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Assigned Email</span>
+            <span class="detail-value">
+                {{ task.assigned_to_email }}
+            </span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Task Status</span>
+            <span class="detail-value">{{ task.status }}</span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Assigned At</span>
+            <span class="detail-value">
+                {{ task.assigned_at.strftime("%d %B %Y, %I:%M %p") }}
+            </span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Due At</span>
+            <span class="detail-value">
+                {{ task.due_at.strftime("%d %B %Y, %I:%M %p") }}
+            </span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Notification Status</span>
+            <span class="detail-value">
+                {{ notification_status }}
+            </span>
+        </div>
+    </div>
+</div>
+
+<div class="page-actions">
+    <a
+        href="{{ url_for('cases.create_Case') }}"
+        class="btn-secondary"
+    >
+        Create Another Case
+    </a>
+</div>
+
+{% endblock %}
