@@ -6,7 +6,7 @@ from app.models import WorkflowPhase, WorkflowTask,AuditLog, utc_now
 class WorkflowConfigurationError(Exception):
      pass
 
-def get_first_active_phase(self):
+def get_first_active_phase():
     first_phase = WorkflowPhase.query.filter_by(is_active=True).order_by(WorkflowPhase.phase_order.asc()).first()
     if first_phase is None:
         raise WorkflowConfigurationError(
@@ -14,7 +14,7 @@ def get_first_active_phase(self):
         )
     return first_phase
     
-def create_initial_workflow_task(self, offboarding_case):
+def create_initial_workflow_task( offboarding_case):
     first_phase = get_first_active_phase()
 
     if first_phase.department is None:
@@ -26,7 +26,7 @@ def create_initial_workflow_task(self, offboarding_case):
     #         f"Phase {first_phase.name} has no assigned department's email"
     #     )
     assigned_at = utc_now()
-    due_at = utc_now() + 7 #instead of hardcoding 7, why not make it a variabe in cnofig file?
+    due_at = utc_now() + timedelta(days=7) #instead of hardcoding 7, why not make it a variabe in cnofig file?
     offboarding_case.current_phase = first_phase
     offboarding_case.status = 'IN_PROGRESS'
     task = WorkflowTask(
