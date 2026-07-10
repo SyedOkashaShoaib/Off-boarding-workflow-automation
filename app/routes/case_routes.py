@@ -10,13 +10,13 @@ case_bp = Blueprint('cases', __name__)
 main_bp = Blueprint('main', __name__)
 
 def generate_Case_Number():
-    last_id = OffboardingCase.query.order_by(OffboardingCase.id.desc()).first()
-    if last_id is None:
-        last_id = 1
+    last_id_obj = OffboardingCase.query.order_by(OffboardingCase.id.desc()).first()
+    if last_id_obj is None:
+        next_id = 1
     else:
-        last_id = last_id + 1
+        next_id = last_id_obj.id + 1
 
-    return f"CASE_{last_id}"
+    return f"CASE_{next_id}"
 #figure out the logic of generating case number.
 
 # @main_bp.route('/')
@@ -30,9 +30,9 @@ def create_Case():
     if form.validate_on_submit():
         case_id = generate_Case_Number()
         new_case = OffboardingCase(
-            case_number=case_id, emp_name = form.emp_name.data,
-            emp_id = form.emp_id.data, emp_designation = form.emp_desig.data,
-            emp_department = form.emp_dep.data, last_day = form.last_date.data,
+            case_number=case_id, employee_name = form.emp_name.data,
+            employee_id = form.emp_id.data, designation = form.emp_desig.data,
+            department = form.emp_dep.data, last_working_day = form.last_date.data,
             line_manager = form.line_manager.data
             )
         db.session.add(new_case)
