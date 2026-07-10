@@ -53,5 +53,5 @@ def create_Case():
 @case_bp.route("/<int:case_id>/created")
 def case_created(case_id):
     case=OffboardingCase.query.get_or_404(case_id)
-    initial_task = WorkflowTask.query.filter_by(case_id).order_by(WorkflowTask.assigned_at.asc()).first_or_404()
-    return render_template('case_created.html', case=case, initial_task=initial_task, notification_status='not sent')
+    initial_task = WorkflowTask.query.filter_by(case_id=case_id).order_by(WorkflowTask.assigned_at.asc()).first_or_404()
+    return render_template('case_created.html', case=case, task=initial_task, notification_status='not sent')
