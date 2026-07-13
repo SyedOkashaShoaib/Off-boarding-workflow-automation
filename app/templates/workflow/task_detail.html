@@ -138,49 +138,184 @@
 </div>
 
 
+{% if task.status == "SUBMITTED" %}
+    <section>
+        <h2>Checklist Submitted</h2>
+
+        <p>
+            This task was submitted on
+            {{ task.submitted_at.strftime(
+                "%d %B %Y, %I:%M %p"
+            ) }}.
+        </p>
+
+        <p>
+            The checklist is now read-only.
+        </p>
+    </section>
+{% endif %}
+
+
 {% if checklist_sections %}
 
-    {% for section_name, checklist_items
-       in checklist_sections.items() %}
+    <form
+        method="post"
+        action="{{ url_for(
+            'workflow.view_task',
+            task_id=task.id
+        ) }}"
+    >
 
-        <div class="confirmation-card">
+        {{ form.hidden_tag() }}
 
-            <div class="confirmation-heading">
-                <h2>{{ section_name }}</h2>
-            </div>
+        {% for section_name, checklist_items
+           in checklist_sections.items() %}
 
-            <ol class="checklist-preview">
+            <fieldset>
+
+                <legend>
+                    {{ section_name }}
+                </legend>
 
                 {% for checklist_item in checklist_items %}
 
-                    <li class="checklist-preview-item">
-                        {{ checklist_item.item_text }}
+                    {% set saved_value =
+                        submitted_values.get(
+                            checklist_item.id,
+                            {}
+                        )
+                    %}
 
-                        {% if checklist_item.is_required %}
-                            <span class="required-indicator">
-                                Required
-                            </span>
+                    {% set selected_response =
+                        saved_value.get(
+                            "response_status",
+                            ""
+                        )
+                    %}
+
+                    {% set saved_reason =
+                        saved_value.get(
+                            "reason",
+                            ""
+                        )
+                    %}
+
+                    <div>
+
+                        <p>
+                            <strong>
+                                {{ loop.index }}.
+                                {{ checklist_item.item_text }}
+                            </strong>
+
+                            {% if checklist_item.is_required %}
+                                <span>Required</span>
+                            {% endif %}
+                        </p>
+
+                        <label>
+                            <input
+                                type="radio"
+                                name="response_{{ checklist_item.id }}"
+                                value="YES"
+
+                                {% if selected_response == "YES" %}
+                                    checked
+                                {% endif %}
+
+                                {% if task.status == "SUBMITTED" %}
+                                    disabled
+                                {% endif %}
+
+                                required
+                            >
+
+                            Yes
+                        </label>
+
+                        <label>
+                            <input
+                                type="radio"
+                                name="response_{{ checklist_item.id }}"
+                                value="NOT_APPLICABLE"
+
+                                {% if selected_response
+                                    == "NOT_APPLICABLE" %}
+                                    checked
+                                {% endif %}
+
+                                {% if task.status == "SUBMITTED" %}
+                                    disabled
+                                {% endif %}
+
+                                required
+                            >
+
+                            Not Applicable
+                        </label>
+
+                        <div>
+                            <label
+                                for="reason_{{ checklist_item.id }}"
+                            >
+                                Reason for Not Applicable
+                            </label>
+
+                            <textarea
+                                id="reason_{{ checklist_item.id }}"
+                                name="reason_{{ checklist_item.id }}"
+                                rows="3"
+                                maxlength="2000"
+
+                                {% if task.status == "SUBMITTED" %}
+                                    disabled
+                                {% endif %}
+                            >{{ saved_reason }}</textarea>
+                        </div>
+
+                        {% if validation_errors.get(
+                            checklist_item.id
+                        ) %}
+                            <p>
+                                <strong>
+                                    {{ validation_errors.get(
+                                        checklist_item.id
+                                    ) }}
+                                </strong>
+                            </p>
                         {% endif %}
-                    </li>
+
+                    </div>
+
+                    <hr>
 
                 {% endfor %}
 
-            </ol>
+            </fieldset>
 
-        </div>
+        {% endfor %}
 
-    {% endfor %}
+        {% if task.status != "SUBMITTED" %}
+            <p>
+                Review all responses carefully. The checklist cannot
+                be edited after submission.
+            </p>
+
+            {{ form.submit() }}
+        {% endif %}
+
+    </form>
 
 {% else %}
 
-    <div class="confirmation-card">
+    <section>
+        <h2>Checklist Unavailable</h2>
 
-        <div class="notification-message notification-error">
+        <p>
             No active checklist items are configured for this
             workflow phase.
-        </div>
-
-    </div>
+        </p>
+    </section>
 
 {% endif %}
 
