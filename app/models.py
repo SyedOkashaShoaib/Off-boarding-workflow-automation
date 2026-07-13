@@ -266,18 +266,18 @@ class AuditLog(db.Model):
     
 
 class EmailNotification(db.Model):
-    __tablename__ = 'emailnotifications'
+    __tablename__ = 'email_notifications'
 
     id = db.Column(db.Integer, primary_key=True)
     case_id = db.Column(db.Integer, db.ForeignKey('offboarding_cases.id'), nullable=False)
-    workflow_task_id = db.Column(db.Integer, db.ForeignKey('workflow_tasks.id'), nullable=False),
+    workflow_task_id = db.Column(db.Integer, db.ForeignKey('workflow_tasks.id'), nullable=False)
     notification_type = db.Column(db.String(50), nullable=False, default='TASK_ASSIGNED')
     recipient_email = db.Column(db.String(150), nullable=False)
     subject = db.Column(db.String(255), nullable=False)
     status = db.Column(db.String(30), nullable=False, default='PENDING')
-    provider_message_id = db.Column(db.String(255), nullable=False)
+    provider_message_id = db.Column(db.String(255), nullable=True)
     error_message = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), default = utc_now(), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default = utc_now, nullable=False)
     attempted_at = db.Column(db.DateTime(timezone=True), nullable=True)
     sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
     case = db.relationship("OffboardingCase")
