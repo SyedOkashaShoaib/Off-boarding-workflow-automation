@@ -58,7 +58,7 @@ def create_case():
         new_case = OffboardingCase(
             case_number=generate_case_number(),
             employee_name=form.emp_name.data.strip(),
-            employee_id=form.emp_id.data.strip(),
+            employee_id=form.emp_id.data,
             designation=form.emp_desig.data.strip(),
             department=form.emp_dep.data.strip(),
             last_working_day=form.last_date.data,
