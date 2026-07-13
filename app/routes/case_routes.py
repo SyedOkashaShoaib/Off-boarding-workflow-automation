@@ -11,7 +11,7 @@ from flask import (
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extension import db
-from app.forms.offboarding_case import CaseForm
+from app.forms.offboardingcaseform import CaseForm
 from app.models import (
     EmailNotification,
     OffboardingCase,
@@ -31,6 +31,13 @@ case_bp = Blueprint("cases", __name__)
 
 
 def generate_case_number() -> str:
+    """
+    Generate the next human-readable offboarding case number.
+
+    Example:
+        OFF-2026-0001
+        OFF-2026-0002
+    """
     current_year = datetime.now().year
 
     latest_case = (
@@ -46,6 +53,23 @@ def generate_case_number() -> str:
 
 @case_bp.route("/create", methods=["GET", "POST"])
 def create_case():
+    """
+    Create an offboarding case, its initial workflow task,
+    and the first pending email-notification record.
+
+    The database work is divided into two transactions:
+
+    Transaction 1:
+        - Create OffboardingCase
+        - Create initial WorkflowTask
+        - Create PENDING EmailNotification
+        - Create initial audit logs
+
+    Transaction 2:
+        - Attempt notification delivery
+        - Update notification to SENT or FAILED
+        - Create delivery audit log
+    """
     form = CaseForm()
 
     if not form.validate_on_submit():
@@ -53,6 +77,10 @@ def create_case():
             "create_case.html",
             form=form,
         )
+
+    # ---------------------------------------------------------
+    # Transaction 1: Create the case and workflow records
+    # ---------------------------------------------------------
     try:
         new_case = OffboardingCase(
             case_number=generate_case_number(),
@@ -113,6 +141,10 @@ def create_case():
             "create_case.html",
             form=form,
         )
+
+    # ---------------------------------------------------------
+    # Transaction 2: Attempt email delivery
+    # ---------------------------------------------------------
     delivery_result = None
 
     try:
@@ -132,6 +164,9 @@ def create_case():
             )
         )
 
+    # ---------------------------------------------------------
+    # User feedback
+    # ---------------------------------------------------------
     if delivery_result is not None and delivery_result.success:
         flash(
             (
