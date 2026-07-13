@@ -104,34 +104,3 @@ Open the assigned task:
 
 
 
-# ==========================
-# Flask Configuration
-# ==========================
-
-SECRET_KEY=replace-with-a-long-random-secret-key
-
-# ==========================
-# Database
-# ==========================
-
-DATABASE_URL=sqlite:///offboarding.db
-
-# ==========================
-# Email Configuration
-# ==========================
-
-EMAIL_BACKEND=console
-
-# ==========================
-# Application
-# ==========================
-
-APP_BASE_URL=http://127.0.0.1:5000
-
-# ==========================
-# Flask Environment
-# ==========================
-
-FLASK_APP=run.py
-FLASK_ENV=development
-FLASK_DEBUG=1

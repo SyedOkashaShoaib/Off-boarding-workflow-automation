@@ -184,7 +184,7 @@ class WorkflowTask(db.Model):
         back_populates="workflow_task",
         cascade="all, delete-orphan"
     )
-
+    notifications= db.relationship("EmailNotification", back_populates='workflow_task', cascade='all, delete-orphan')
     def __repr__(self):
         return f"<WorkflowTask Case={self.case_id} Phase={self.phase_id} Status={self.status}>"
 
@@ -263,3 +263,29 @@ class AuditLog(db.Model):
 
     def __repr__(self):
         return f"<AuditLog {self.action}>"
+    
+
+class EmailNotification(db.Model):
+    __tablename__ = 'emailnotifications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('offboarding_cases.id'), nullable=False)
+    workflow_task_id = db.Column(db.Integer, db.ForeignKey('workflow_tasks.id'), nullable=False),
+    notification_type = db.Column(db.String(50), nullable=False, default='TASK_ASSIGNED')
+    recipient_email = db.Column(db.String(150), nullable=False)
+    subject = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(30), nullable=False, default='PENDING')
+    provider_message_id = db.Column(db.String(255), nullable=False)
+    error_message = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default = utc_now(), nullable=False)
+    attempted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    case = db.relationship("OffboardingCase")
+    workflow_task = db.relationship("WorkflowTask", back_populates='notifications')
+
+    def __repr__(self):
+        return (
+            f"EmailNotification"
+            f"Task={self.workflow_task_id}"
+            f"Status={self.status}"
+        )
