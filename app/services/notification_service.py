@@ -3,7 +3,13 @@ from urllib.parse import urljoin
 
 from flask import current_app
 
-from app.models import WorkflowTask
+from app.extension import db
+from app.models import (
+    AuditLog,
+    EmailNotification,
+    WorkflowTask,
+    utc_now,
+)
 from app.services.email_service import (
     EmailResult,
     get_email_service,
@@ -11,33 +17,67 @@ from app.services.email_service import (
 
 
 def build_task_url(task: WorkflowTask) -> str:
-    """
-    Build the absolute URL that the assigned department will open.
-    """
-
     base_url = current_app.config["APP_BASE_URL"].rstrip("/") + "/"
     relative_path = f"workflow/tasks/{task.id}"
 
     return urljoin(base_url, relative_path)
 
 
-def send_task_assignment_notification(
+def create_task_assignment_notification(
     task: WorkflowTask,
-) -> EmailResult:
+) -> EmailNotification:
     """
-    Build and send an offboarding task-assignment email.
+    Create a pending notification record.
+
+    The notification is added to the current database session,
+    but this function does not commit.
     """
-
-    email_service = get_email_service()
-    task_url = build_task_url(task)
-
-    due_at_text = task.due_at.strftime(
-        "%d %B %Y, %I:%M %p"
-    )
 
     subject = (
         f"Offboarding Action Required — "
         f"{task.case.case_number}"
+    )
+
+    notification = EmailNotification(
+        case=task.case,
+        workflow_task=task,
+        notification_type="TASK_ASSIGNED",
+        recipient_email=task.assigned_to_email,
+        subject=subject,
+        status="PENDING",
+    )
+
+    db.session.add(notification)
+
+    audit_log = AuditLog(
+        case=task.case,
+        action="TASK_NOTIFICATION_QUEUED",
+        performed_by="System",
+        details=(
+            f"Task notification queued for "
+            f"'{task.assigned_to_email}'."
+        ),
+    )
+
+    db.session.add(audit_log)
+
+    return notification
+
+
+def deliver_task_assignment_notification(
+    notification: EmailNotification,
+) -> EmailResult:
+    """
+    Attempt delivery and update the notification record.
+
+    This function changes the SQLAlchemy session but does not commit.
+    """
+
+    task = notification.workflow_task
+    task_url = build_task_url(task)
+
+    due_at_text = task.due_at.strftime(
+        "%d %B %Y, %I:%M %p"
     )
 
     text_body = f"""
@@ -91,16 +131,53 @@ Open the assigned task:
     </p>
     """.strip()
 
-    return email_service.send_email(
-        recipients=[task.assigned_to_email],
-        subject=subject,
-        html_body=html_body,
-        text_body=text_body,
+    notification.attempted_at = utc_now()
+
+    try:
+        email_service = get_email_service()
+
+        result = email_service.send_email(
+            recipients=[notification.recipient_email],
+            subject=notification.subject,
+            html_body=html_body,
+            text_body=text_body,
+        )
+
+    except Exception as exc:
+        result = EmailResult(
+            success=False,
+            error_message=str(exc),
+        )
+
+    notification.provider_message_id = result.provider_message_id
+    notification.error_message = result.error_message
+
+    if result.success:
+        notification.status = "SENT"
+        notification.sent_at = utc_now()
+
+        action = "TASK_NOTIFICATION_SENT"
+        details = (
+            f"Task notification sent to "
+            f"'{notification.recipient_email}'."
+        )
+    else:
+        notification.status = "FAILED"
+
+        action = "TASK_NOTIFICATION_FAILED"
+        details = (
+            f"Task notification failed for "
+            f"'{notification.recipient_email}'. "
+            f"Reason: {result.error_message}"
+        )
+
+    db.session.add(
+        AuditLog(
+            case=task.case,
+            action=action,
+            performed_by="System",
+            details=details,
+        )
     )
 
-
-
-
-
-
-
+    return result
