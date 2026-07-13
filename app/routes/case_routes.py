@@ -11,7 +11,7 @@ from flask import (
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extension import db
-from app.forms.offboarding_case import CaseForm
+from app.forms.offboarding_case import Case_Form
 from app.models import (
     EmailNotification,
     OffboardingCase,
@@ -46,7 +46,7 @@ def generate_case_number() -> str:
 
 @case_bp.route("/create", methods=["GET", "POST"])
 def create_case():
-    form = CaseForm()
+    form = Case_Form()
 
     if not form.validate_on_submit():
         return render_template(
