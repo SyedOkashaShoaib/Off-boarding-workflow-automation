@@ -48,7 +48,7 @@ def view_task(task_id):
                 continue
             section_name = checklist_item.section or 'Checklist'
 
-        checklist_sections.setdefault(
+            checklist_sections.setdefault(
             section_name,
             [],
         ).append(checklist_item)
