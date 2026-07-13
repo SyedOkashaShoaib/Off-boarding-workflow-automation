@@ -2,37 +2,57 @@
 
 {% block content %}
 
+{% set backend = email_backend | default("console", true) %}
+{% set notification_state = notification.status if notification else "NOT RECORDED" %}
+
 <section class="page-header">
-    <h1>Offboarding Case Information</h1>
+    <h1>Offboarding Case Created</h1>
+    <p>
+        The offboarding case and its initial workflow assignment
+        have been created successfully.
+    </p>
 </section>
 
+
+<!-- Case information -->
 <div class="confirmation-card">
+
     <div class="confirmation-heading">
         <h2>{{ case.case_number }}</h2>
+
         <span class="status-badge status-success">
             {{ case.status }}
         </span>
     </div>
 
     <div class="details-grid">
+
         <div class="detail-item">
             <span class="detail-label">Employee Name</span>
-            <span class="detail-value">{{ case.employee_name }}</span>
+            <span class="detail-value">
+                {{ case.employee_name }}
+            </span>
         </div>
 
         <div class="detail-item">
             <span class="detail-label">Employee ID</span>
-            <span class="detail-value">{{ case.employee_id }}</span>
+            <span class="detail-value">
+                {{ case.employee_id }}
+            </span>
         </div>
 
         <div class="detail-item">
             <span class="detail-label">Designation</span>
-            <span class="detail-value">{{ case.designation }}</span>
+            <span class="detail-value">
+                {{ case.designation }}
+            </span>
         </div>
 
         <div class="detail-item">
             <span class="detail-label">Employee Department</span>
-            <span class="detail-value">{{ case.department }}</span>
+            <span class="detail-value">
+                {{ case.department }}
+            </span>
         </div>
 
         <div class="detail-item">
@@ -44,18 +64,48 @@
 
         <div class="detail-item">
             <span class="detail-label">Line Manager</span>
-            <span class="detail-value">{{ case.line_manager }}</span>
+            <span class="detail-value">
+                {{ case.line_manager }}
+            </span>
         </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Created By</span>
+            <span class="detail-value">
+                {{ case.created_by or "System" }}
+            </span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Created At</span>
+            <span class="detail-value">
+                {{ case.created_at.strftime("%d %B %Y, %I:%M %p") }}
+            </span>
+        </div>
+
     </div>
+
 </div>
 
+
+<!-- Initial workflow task -->
 <div class="confirmation-card">
-    <h2>Initial Workflow Assignment</h2>
+
+    <div class="confirmation-heading">
+        <h2>Initial Workflow Assignment</h2>
+
+        <span class="status-badge">
+            {{ task.status }}
+        </span>
+    </div>
 
     <div class="details-grid">
+
         <div class="detail-item">
             <span class="detail-label">Current Phase</span>
-            <span class="detail-value">{{ task.phase.name }}</span>
+            <span class="detail-value">
+                {{ task.phase.name }}
+            </span>
         </div>
 
         <div class="detail-item">
@@ -74,7 +124,9 @@
 
         <div class="detail-item">
             <span class="detail-label">Task Status</span>
-            <span class="detail-value">{{ task.status }}</span>
+            <span class="detail-value">
+                {{ task.status }}
+            </span>
         </div>
 
         <div class="detail-item">
@@ -91,14 +143,131 @@
             </span>
         </div>
 
+    </div>
+
+</div>
+
+
+<!-- Notification information -->
+<div class="confirmation-card">
+
+    <div class="confirmation-heading">
+        <h2>Task Notification</h2>
+
+        <span class="status-badge
+            {% if notification_state == 'SENT' %}
+                status-success
+            {% endif %}
+        ">
+            {{ notification_state }}
+        </span>
+    </div>
+
+    <div class="details-grid">
+
         <div class="detail-item">
-            <span class="detail-label">Notification Status</span>
+            <span class="detail-label">Notification Type</span>
             <span class="detail-value">
-                {{ notification_status }}
+                {% if notification %}
+                    {{ notification.notification_type }}
+                {% else %}
+                    Not recorded
+                {% endif %}
             </span>
         </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Recipient</span>
+            <span class="detail-value">
+                {% if notification %}
+                    {{ notification.recipient_email }}
+                {% else %}
+                    {{ task.assigned_to_email }}
+                {% endif %}
+            </span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Email Backend</span>
+            <span class="detail-value">
+                {{ backend | upper }}
+            </span>
+        </div>
+
+        <div class="detail-item">
+            <span class="detail-label">Delivery Status</span>
+            <span class="detail-value">
+                {{ notification_state }}
+            </span>
+        </div>
+
+        {% if notification and notification.attempted_at %}
+            <div class="detail-item">
+                <span class="detail-label">Attempted At</span>
+                <span class="detail-value">
+                    {{ notification.attempted_at.strftime(
+                        "%d %B %Y, %I:%M %p"
+                    ) }}
+                </span>
+            </div>
+        {% endif %}
+
+        {% if notification and notification.sent_at %}
+            <div class="detail-item">
+                <span class="detail-label">Processed At</span>
+                <span class="detail-value">
+                    {{ notification.sent_at.strftime(
+                        "%d %B %Y, %I:%M %p"
+                    ) }}
+                </span>
+            </div>
+        {% endif %}
+
+        {% if notification and notification.provider_message_id %}
+            <div class="detail-item">
+                <span class="detail-label">Provider Reference</span>
+                <span class="detail-value">
+                    {{ notification.provider_message_id }}
+                </span>
+            </div>
+        {% endif %}
+
     </div>
+
+    {% if notification_state == "FAILED" %}
+        <div class="notification-message notification-error">
+            The case and workflow task were created successfully, but
+            notification delivery failed. The failure has been recorded
+            and can be retried later.
+        </div>
+
+    {% elif notification_state == "PENDING" %}
+        <div class="notification-message">
+            The notification has been recorded and is awaiting a
+            delivery attempt.
+        </div>
+
+    {% elif notification_state == "SENT" and backend | lower == "console" %}
+        <div class="notification-message">
+            The notification was processed successfully by the console
+            development backend. No email was delivered to an external
+            mailbox.
+        </div>
+
+    {% elif notification_state == "SENT" %}
+        <div class="notification-message">
+            The notification was accepted successfully by the configured
+            email service.
+        </div>
+
+    {% else %}
+        <div class="notification-message">
+            No notification record was found for this workflow task.
+        </div>
+    {% endif %}
+
 </div>
+
 
 <div class="page-actions">
     <a
