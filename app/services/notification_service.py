@@ -181,3 +181,213 @@ Open the assigned task:
     )
 
     return result
+def create_overdue_task_notification(
+    *,
+    task: WorkflowTask,
+    recipient_email: str,
+    notification_type: str,
+    deduplication_key: str,
+) -> EmailNotification:
+    """
+    Create a persistent overdue-notification record.
+
+    This function adds records to the current SQLAlchemy session
+    but does not commit.
+    """
+
+    subject = (
+        f"Overdue Offboarding Task — "
+        f"{task.case.case_number} — "
+        f"{task.phase.name}"
+    )
+
+    notification = EmailNotification(
+        case=task.case,
+        workflow_task=task,
+        notification_type=notification_type,
+        deduplication_key=deduplication_key,
+        recipient_email=recipient_email,
+        subject=subject,
+        status="PENDING",
+    )
+
+    db.session.add(notification)
+
+    db.session.add(
+        AuditLog(
+            case=task.case,
+            action="OVERDUE_NOTIFICATION_QUEUED",
+            performed_by="System",
+            details=(
+                f"An overdue escalation notification was queued "
+                f"for workflow task {task.id}. "
+                f"Notification type: {notification_type}. "
+                f"Recipient: '{recipient_email}'."
+            ),
+        )
+    )
+
+    return notification
+
+
+def deliver_overdue_task_notification(
+    notification: EmailNotification,
+) -> EmailResult:
+    """
+    Attempt delivery of an overdue-task escalation notification.
+
+    The notification record and audit log are updated, but this
+    function does not commit.
+    """
+
+    task = notification.workflow_task
+    task_url = build_task_url(task)
+
+    due_at_text = task.due_at.strftime(
+        "%d %B %Y, %I:%M %p"
+    )
+
+    assigned_at_text = task.assigned_at.strftime(
+        "%d %B %Y, %I:%M %p"
+    )
+
+    if task.opened_at is None:
+        opened_status_text = "The task has not been opened."
+    else:
+        opened_status_text = (
+            "The task was opened on "
+            f"{task.opened_at.strftime('%d %B %Y, %I:%M %p')}, "
+            "but it has not been submitted."
+        )
+
+    text_body = f"""
+An employee offboarding task is overdue.
+
+Case Number: {task.case.case_number}
+Employee: {task.case.employee_name}
+Phase: {task.phase.name}
+Responsible Department: {task.phase.department.name}
+Assigned Email: {task.assigned_to_email}
+Task Status: {task.status}
+Assigned At: {assigned_at_text}
+Due At: {due_at_text}
+Open Status: {opened_status_text}
+
+Open the task:
+{task_url}
+""".strip()
+
+    html_body = f"""
+    <h2>Overdue Offboarding Task</h2>
+
+    <p>
+        An employee offboarding task has passed its due date
+        and requires NOC attention.
+    </p>
+
+    <ul>
+        <li>
+            <strong>Case Number:</strong>
+            {escape(task.case.case_number)}
+        </li>
+        <li>
+            <strong>Employee:</strong>
+            {escape(task.case.employee_name)}
+        </li>
+        <li>
+            <strong>Phase:</strong>
+            {escape(task.phase.name)}
+        </li>
+        <li>
+            <strong>Responsible Department:</strong>
+            {escape(task.phase.department.name)}
+        </li>
+        <li>
+            <strong>Assigned Email:</strong>
+            {escape(task.assigned_to_email)}
+        </li>
+        <li>
+            <strong>Task Status:</strong>
+            {escape(task.status)}
+        </li>
+        <li>
+            <strong>Assigned At:</strong>
+            {escape(assigned_at_text)}
+        </li>
+        <li>
+            <strong>Due At:</strong>
+            {escape(due_at_text)}
+        </li>
+        <li>
+            <strong>Open Status:</strong>
+            {escape(opened_status_text)}
+        </li>
+    </ul>
+
+    <p>
+        <a href="{escape(task_url)}">
+            Open Overdue Task
+        </a>
+    </p>
+    """.strip()
+
+    notification.attempted_at = utc_now()
+    notification.provider_message_id = None
+    notification.error_message = None
+    notification.sent_at = None
+
+    try:
+        email_service = get_email_service()
+
+        result = email_service.send_email(
+            recipients=[notification.recipient_email],
+            subject=notification.subject,
+            html_body=html_body,
+            text_body=text_body,
+        )
+
+    except Exception as exc:
+        result = EmailResult(
+            success=False,
+            error_message=str(exc),
+        )
+
+    notification.provider_message_id = (
+        result.provider_message_id
+    )
+
+    notification.error_message = result.error_message
+
+    if result.success:
+        notification.status = "SENT"
+        notification.sent_at = utc_now()
+
+        action = "OVERDUE_NOTIFICATION_SENT"
+
+        details = (
+            f"Overdue escalation for workflow task {task.id} "
+            f"was sent to '{notification.recipient_email}'."
+        )
+
+    else:
+        notification.status = "FAILED"
+
+        action = "OVERDUE_NOTIFICATION_FAILED"
+
+        details = (
+            f"Overdue escalation for workflow task {task.id} "
+            f"failed for '{notification.recipient_email}'. "
+            f"Reason: "
+            f"{result.error_message or 'No reason returned.'}"
+        )
+
+    db.session.add(
+        AuditLog(
+            case=task.case,
+            action=action,
+            performed_by="System",
+            details=details,
+        )
+    )
+
+    return result
