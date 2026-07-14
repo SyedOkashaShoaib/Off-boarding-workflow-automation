@@ -398,6 +398,161 @@ def view_task(task_id):
         submitted_values=submitted_values,
         validation_errors=validation_errors,
     )
+@workflow_bp.route(
+    "/tasks/<int:task_id>/approval",
+    methods=["GET", "POST"],
+)
+def admin_approval(task_id):
+    """
+    Display and process the final Admin approval task.
+    """
+
+    task = WorkflowTask.query.get_or_404(task_id)
+
+    if not task.phase.is_final_approval:
+        return redirect(
+            url_for(
+                "workflow.view_task",
+                task_id=task.id,
+            )
+        )
+
+    record_task_opening(task)
+
+    form = AdminApprovalForm()
+
+    prior_tasks = sorted(
+        [
+            case_task
+            for case_task in task.case.tasks
+            if case_task.phase.phase_order
+            < task.phase.phase_order
+        ],
+        key=lambda case_task: (
+            case_task.phase.phase_order,
+            case_task.id,
+        ),
+    )
+
+    completion_issues = get_prior_phase_completion_issues(
+        task
+    )
+
+    case_is_closed = (
+        task.case.status == "CLOSED"
+        or task.case.closed_at is not None
+        or task.status == "APPROVED"
+    )
+
+    if form.validate_on_submit():
+        if case_is_closed:
+            flash(
+                "This offboarding case has already been closed.",
+                "warning",
+            )
+
+            return redirect(
+                url_for(
+                    "workflow.admin_approval",
+                    task_id=task.id,
+                )
+            )
+
+        if completion_issues:
+            flash(
+                (
+                    "The case cannot be approved because one or "
+                    "more previous workflow phases are incomplete."
+                ),
+                "error",
+            )
+
+            return render_template(
+                "workflow/admin_approval.html",
+                task=task,
+                form=form,
+                prior_tasks=prior_tasks,
+                completion_issues=completion_issues,
+                case_is_closed=case_is_closed,
+            )
+
+        try:
+            approve_and_close_case(
+                final_task=task,
+                approved_by=task.assigned_to_email,
+                remarks=form.remarks.data or "",
+            )
+
+            db.session.commit()
+
+        except FinalApprovalError as exc:
+            db.session.rollback()
+
+            flash(
+                str(exc),
+                "error",
+            )
+
+            return render_template(
+                "workflow/admin_approval.html",
+                task=task,
+                form=form,
+                prior_tasks=prior_tasks,
+                completion_issues=completion_issues,
+                case_is_closed=case_is_closed,
+            )
+
+        except SQLAlchemyError:
+            db.session.rollback()
+
+            current_app.logger.exception(
+                (
+                    "Database error while granting final approval "
+                    "for workflow task %s."
+                ),
+                task.id,
+            )
+
+            flash(
+                (
+                    "A database error occurred. The case was not "
+                    "closed."
+                ),
+                "error",
+            )
+
+            return render_template(
+                "workflow/admin_approval.html",
+                task=task,
+                form=form,
+                prior_tasks=prior_tasks,
+                completion_issues=completion_issues,
+                case_is_closed=case_is_closed,
+            )
+
+        flash(
+            (
+                f"Offboarding case {task.case.case_number} was "
+                "approved and closed successfully."
+            ),
+            "success",
+        )
+
+        return redirect(
+            url_for(
+                "workflow.admin_approval",
+                task_id=task.id,
+            )
+        )
+
+    return render_template(
+        "workflow/admin_approval.html",
+        task=task,
+        form=form,
+        prior_tasks=prior_tasks,
+        completion_issues=completion_issues,
+        case_is_closed=case_is_closed,
+    )
 
 
     
