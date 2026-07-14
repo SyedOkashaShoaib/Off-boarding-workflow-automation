@@ -7,8 +7,8 @@ class Case_Form(FlaskForm):
     # emp_id = IntegerField('Employe')
     emp_desig = StringField(label="Employee designation", validators=[DataRequired(message='Employee Designation is required')])
     emp_dep = StringField(label="EMployee department", validators=[DataRequired(message='Employee department is required')])
-    last_date = DateField(label="Select the employee's last date of work", validators=[DataRequired(message='Last date of working si required')])
-    emp_id = IntegerField(label='Enter employee id',validators=[DataRequired(message='Employee id is required')])
-    line_manager = StringField(label="Enter the name of line manager/HOD", validators=[DataRequired(message='Employee id is required')])
+    last_date = DateField(label="Employee's last date of work", validators=[DataRequired(message='Last date of working si required')])
+    emp_id = IntegerField(label='Employee id',validators=[DataRequired(message='Employee id is required')])
+    line_manager = StringField(label="Line manager/HOD", validators=[DataRequired(message='Employee id is required')])
     submit = SubmitField("Begin Offboarding Process")
 
