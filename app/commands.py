@@ -48,6 +48,7 @@ def seed_phase_checklist(
 def seed_data_command():
     seed_departments()
     seed_workflow_phases()
+    
     seed_noc_checklist_items()
 
     db.session.commit()
