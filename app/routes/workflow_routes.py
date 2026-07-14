@@ -10,7 +10,10 @@ from flask import (
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extension import db
-from app.forms.workflow_forms import WorkflowChecklistForm
+from app.forms.workflow_forms import (
+    WorkflowChecklistForm,
+    AdminApprovalForm,
+    )
 from app.models import (
     AuditLog,
     WorkflowTask,
@@ -30,7 +33,11 @@ from app.services.workflow_service import (
     WorkflowTransitionError,
     create_next_workflow_task,
 )
-
+from app.services.approval_service import (
+    FinalApprovalError,
+    approve_and_close_case,
+    get_prior_phase_completion_issues,
+)
 
 workflow_bp = Blueprint(
     "workflow",
@@ -145,8 +152,9 @@ def view_task(task_id):
 
     task = WorkflowTask.query.get_or_404(task_id)
 
+    if task.phase.is_final_approval:
+        return redirect(url_for("workflow.admin_approval", task_id = task.id))
     record_task_opening(task)
-
     form = WorkflowChecklistForm()
 
     checklist_sections = build_checklist_sections(task)
@@ -390,3 +398,6 @@ def view_task(task_id):
         submitted_values=submitted_values,
         validation_errors=validation_errors,
     )
+
+
+    
