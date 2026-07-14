@@ -272,6 +272,7 @@ class EmailNotification(db.Model):
     case_id = db.Column(db.Integer, db.ForeignKey('offboarding_cases.id'), nullable=False)
     workflow_task_id = db.Column(db.Integer, db.ForeignKey('workflow_tasks.id'), nullable=False)
     notification_type = db.Column(db.String(50), nullable=False, default='TASK_ASSIGNED')
+    deduplication_key = db.Column(db.String(255), unique= True, nullable=True,)
     recipient_email = db.Column(db.String(150), nullable=False)
     subject = db.Column(db.String(255), nullable=False)
     status = db.Column(db.String(30), nullable=False, default='PENDING')
