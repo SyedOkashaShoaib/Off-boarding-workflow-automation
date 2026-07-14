@@ -5,6 +5,44 @@ from app.extension import db
 from app.models import Department, WorkflowPhase, ChecklistItem
 
 
+def seed_phase_checklist(
+        phase: WorkflowPhase,
+        section: str,
+        item_texts: list[str],
+)->int:
+    created_count = 0
+    for display_order, item_text in enumerate(
+        item_texts,
+        start=1,
+    ):
+        existing_item = (
+            ChecklistItem.query
+            .filter_by(
+                phase_id=phase.id,
+                item_text=item_text,
+            )
+            .first()
+        )
+        if existing_item is None: 
+            existing_item=ChecklistItem(
+                phase=phase,
+                section=section,
+                item_text=item_text,
+                display_order=display_order,
+                is_required=True,
+                is_active=True,
+            )
+            db.session.add(existing_item)
+            created_count+=1
+        else:
+            existing_item.section=section
+            existing_item.display_order=display_order
+            existing_item.is_required = True
+            existing_item.is_active=True
+
+    return created_count
+
+
 @click.command("seed-data")
 @with_appcontext
 def seed_data_command():
