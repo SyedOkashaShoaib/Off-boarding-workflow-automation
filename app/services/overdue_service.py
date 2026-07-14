@@ -1,5 +1,5 @@
 from datetime import date
-
+from typing import Optional
 from flask import current_app
 
 from app.models import (
@@ -22,7 +22,7 @@ class OverdueConfigurationError(Exception):
 
 
 def find_overdue_tasks(
-    task_id: int | None = None,
+    task_id: Optional[int] = None,
 ) -> list[WorkflowTask]:
     """
     Return active tasks whose due date has passed.
@@ -108,7 +108,7 @@ def get_overdue_notification_type(
 
 def build_overdue_deduplication_key(
     task: WorkflowTask,
-    reminder_date: date | None = None,
+    reminder_date: Optional[date]= None,
 ) -> str:
     """
     Build a unique key allowing one reminder per task per UTC day.
@@ -125,7 +125,7 @@ def build_overdue_deduplication_key(
 
 def find_existing_overdue_notification(
     deduplication_key: str,
-) -> EmailNotification | None:
+) -> Optional[EmailNotification]:
     """
     Find today's existing reminder notification, if one exists.
     """

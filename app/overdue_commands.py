@@ -1,4 +1,5 @@
 import click
+from typing import Optional
 from flask.cli import with_appcontext
 from sqlalchemy.exc import (
     IntegrityError,
@@ -39,7 +40,7 @@ from app.services.overdue_service import (
 @with_appcontext
 def process_overdue_tasks_command(
     dry_run: bool,
-    task_id: int | None,
+    task_id: Optional[int],
 ) -> None:
     """
     Find overdue workflow tasks and notify the escalation department.

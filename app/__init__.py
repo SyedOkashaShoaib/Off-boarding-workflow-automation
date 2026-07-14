@@ -1,7 +1,7 @@
 from flask import Flask
 from config import Config
 from app.extension import db, migrate
-
+from app.overdue_commands import process_overdue_tasks_command
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -19,4 +19,5 @@ def create_app():
 
     from app.commands import seed_data_command
     app.cli.add_command(seed_data_command)
+    app.cli.add_command(process_overdue_tasks_command)
     return app
