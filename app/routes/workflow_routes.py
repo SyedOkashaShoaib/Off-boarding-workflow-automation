@@ -21,6 +21,15 @@ from app.services.checklist_service import (
     persist_checklist_submission,
     validate_checklist_submission,
 )
+from app.services.notification_service import (
+    create_task_assignment_notification,
+    deliver_task_assignment_notification,
+)
+from app.services.workflow_service import (
+    WorkflowConfigurationError,
+    WorkflowTransitionError,
+    create_next_workflow_task,
+)
 
 
 workflow_bp = Blueprint(
@@ -33,9 +42,7 @@ workflow_bp = Blueprint(
 def build_checklist_sections(
     task: WorkflowTask,
 ) -> dict[str, list]:
-    """
-    Group active checklist items by their database section.
-    """
+    """Group active checklist items by database section."""
 
     checklist_sections: dict[str, list] = {}
 
@@ -44,8 +51,7 @@ def build_checklist_sections(
             continue
 
         section_name = (
-            checklist_item.section
-            or "Checklist"
+            checklist_item.section or "Checklist"
         )
 
         checklist_sections.setdefault(
@@ -60,8 +66,8 @@ def build_saved_response_values(
     task: WorkflowTask,
 ) -> dict[int, dict[str, str]]:
     """
-    Convert saved ChecklistResponse records into values that the
-    task template can display.
+    Convert saved ChecklistResponse records into values that can
+    be displayed by the task template.
     """
 
     return {
@@ -75,13 +81,10 @@ def build_saved_response_values(
     }
 
 
-def record_task_opening(task: WorkflowTask) -> None:
-    """
-    Record only the first time the task is opened.
-
-    A failure to save the opening timestamp does not prevent the
-    task page from being displayed.
-    """
+def record_task_opening(
+    task: WorkflowTask,
+) -> None:
+    """Record only the first time a workflow task is opened."""
 
     if task.opened_at is not None:
         return
@@ -100,7 +103,7 @@ def record_task_opening(task: WorkflowTask) -> None:
                 details=(
                     f"Workflow task {task.id} was opened through "
                     "its assigned task link. The user's identity "
-                    "was not authenticated at this stage."
+                    "has not yet been authenticated."
                 ),
             )
         )
@@ -130,7 +133,14 @@ def record_task_opening(task: WorkflowTask) -> None:
 )
 def view_task(task_id):
     """
-    Display and submit a database-driven workflow checklist.
+    Display and submit a departmental workflow checklist.
+
+    On successful submission:
+    - save the current checklist;
+    - mark the current task submitted;
+    - create the next workflow task;
+    - queue the next assignment notification;
+    - attempt notification delivery.
     """
 
     task = WorkflowTask.query.get_or_404(task_id)
@@ -141,14 +151,34 @@ def view_task(task_id):
 
     checklist_sections = build_checklist_sections(task)
 
-    submitted_values = build_saved_response_values(task)
+    submitted_values = build_saved_response_values(
+        task
+    )
+
     validation_errors: dict[int, str] = {}
 
     if request.method == "POST":
+
         if task.status == "SUBMITTED":
             flash(
                 "This workflow task has already been submitted.",
                 "warning",
+            )
+
+            return redirect(
+                url_for(
+                    "workflow.view_task",
+                    task_id=task.id,
+                )
+            )
+
+        if task.phase.is_final_approval:
+            flash(
+                (
+                    "Final approval tasks cannot be submitted "
+                    "through the departmental checklist form."
+                ),
+                "error",
             )
 
             return redirect(
@@ -205,7 +235,7 @@ def view_task(task_id):
             flash(
                 (
                     "The checklist contains validation errors. "
-                    "Correct the highlighted items and submit again."
+                    "Correct the listed items and submit again."
                 ),
                 "error",
             )
@@ -219,6 +249,10 @@ def view_task(task_id):
                 validation_errors=validation_errors,
             )
 
+        # -----------------------------------------------------
+        # Transaction 1:
+        # Save the checklist and create the next task.
+        # -----------------------------------------------------
         try:
             response_count = persist_checklist_submission(
                 task=task,
@@ -226,9 +260,23 @@ def view_task(task_id):
                 responded_by=task.assigned_to_email,
             )
 
+            next_task = create_next_workflow_task(
+                completed_task=task,
+            )
+
+            notification = (
+                create_task_assignment_notification(
+                    next_task
+                )
+            )
+
             db.session.commit()
 
-        except ChecklistSubmissionError as exc:
+        except (
+            ChecklistSubmissionError,
+            WorkflowConfigurationError,
+            WorkflowTransitionError,
+        ) as exc:
             db.session.rollback()
 
             flash(
@@ -249,14 +297,17 @@ def view_task(task_id):
             db.session.rollback()
 
             current_app.logger.exception(
-                "Failed to submit workflow task %s.",
+                (
+                    "Database error while submitting task %s "
+                    "and advancing the workflow."
+                ),
                 task.id,
             )
 
             flash(
                 (
-                    "A database error occurred while submitting "
-                    "the checklist. No responses were saved."
+                    "A database error occurred. The checklist was "
+                    "not submitted and the workflow was not advanced."
                 ),
                 "error",
             )
@@ -270,13 +321,59 @@ def view_task(task_id):
                 validation_errors=validation_errors,
             )
 
-        flash(
-            (
-                f"Checklist submitted successfully with "
-                f"{response_count} responses."
-            ),
-            "success",
-        )
+        # -----------------------------------------------------
+        # Transaction 2:
+        # Attempt delivery of the next task notification.
+        # -----------------------------------------------------
+        delivery_result = None
+
+        try:
+            delivery_result = (
+                deliver_task_assignment_notification(
+                    notification
+                )
+            )
+
+            db.session.commit()
+
+        except Exception:
+            db.session.rollback()
+
+            current_app.logger.exception(
+                (
+                    "The next workflow task was created, but its "
+                    "notification delivery result could not be saved."
+                )
+            )
+
+        # -----------------------------------------------------
+        # User feedback
+        # -----------------------------------------------------
+        if (
+            delivery_result is not None
+            and delivery_result.success
+        ):
+            flash(
+                (
+                    f"Checklist submitted successfully with "
+                    f"{response_count} responses. The workflow "
+                    f"advanced to '{next_task.phase.name}', and "
+                    "the next task notification was processed."
+                ),
+                "success",
+            )
+
+        else:
+            flash(
+                (
+                    f"Checklist submitted successfully with "
+                    f"{response_count} responses. The workflow "
+                    f"advanced to '{next_task.phase.name}', but "
+                    "the next task notification was not delivered "
+                    "successfully."
+                ),
+                "warning",
+            )
 
         return redirect(
             url_for(
