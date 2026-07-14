@@ -1,231 +1,392 @@
-from datetime import timedelta
+from flask import (
+    Blueprint,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.extension import db
+from app.forms.workflow_forms import WorkflowChecklistForm
 from app.models import (
     AuditLog,
-    OffboardingCase,
-    WorkflowPhase,
     WorkflowTask,
     utc_now,
 )
+from app.services.checklist_service import (
+    ChecklistSubmissionError,
+    persist_checklist_submission,
+    validate_checklist_submission,
+)
+from app.services.notification_service import (
+    create_task_assignment_notification,
+    deliver_task_assignment_notification,
+)
+from app.services.workflow_service import (
+    WorkflowConfigurationError,
+    WorkflowTransitionError,
+    create_next_workflow_task,
+)
 
 
-class WorkflowConfigurationError(Exception):
-    """Raised when workflow master data is incomplete."""
+workflow_bp = Blueprint(
+    "workflow",
+    __name__,
+    url_prefix="/workflow",
+)
 
 
-class WorkflowTransitionError(Exception):
-    """Raised when a case cannot advance to the next phase."""
+def build_checklist_sections(
+    task: WorkflowTask,
+) -> dict[str, list]:
+    """Group active checklist items by database section."""
+
+    checklist_sections: dict[str, list] = {}
+
+    for checklist_item in task.phase.checklist_items:
+        if not checklist_item.is_active:
+            continue
+
+        section_name = (
+            checklist_item.section or "Checklist"
+        )
+
+        checklist_sections.setdefault(
+            section_name,
+            [],
+        ).append(checklist_item)
+
+    return checklist_sections
 
 
-def validate_phase_assignment(
-    phase: WorkflowPhase,
-) -> str:
+def build_saved_response_values(
+    task: WorkflowTask,
+) -> dict[int, dict[str, str]]:
     """
-    Validate that a workflow phase has an active department
-    and a usable notification email.
-
-    Returns:
-        The cleaned department email address.
-    """
-
-    if phase.department is None:
-        raise WorkflowConfigurationError(
-            f"Workflow phase '{phase.name}' has no department."
-        )
-
-    if not phase.department.is_active:
-        raise WorkflowConfigurationError(
-            f"Department '{phase.department.name}' is inactive."
-        )
-
-    department_email = (
-        phase.department.email or ""
-    ).strip()
-
-    if not department_email:
-        raise WorkflowConfigurationError(
-            f"Department '{phase.department.name}' "
-            "has no notification email."
-        )
-
-    return department_email
-
-
-def get_first_active_phase() -> WorkflowPhase:
-    """Return the first active workflow phase."""
-
-    first_phase = (
-        WorkflowPhase.query
-        .filter_by(is_active=True)
-        .order_by(
-            WorkflowPhase.phase_order.asc(),
-            WorkflowPhase.id.asc(),
-        )
-        .first()
-    )
-
-    if first_phase is None:
-        raise WorkflowConfigurationError(
-            "No active workflow phases are configured."
-        )
-
-    return first_phase
-
-
-def get_next_active_phase(
-    current_phase: WorkflowPhase,
-) -> WorkflowPhase:
-    """
-    Return the next active workflow phase after the supplied phase.
+    Convert saved ChecklistResponse records into values that can
+    be displayed by the task template.
     """
 
-    next_phase = (
-        WorkflowPhase.query
-        .filter(
-            WorkflowPhase.is_active.is_(True),
-            WorkflowPhase.phase_order
-            > current_phase.phase_order,
-        )
-        .order_by(
-            WorkflowPhase.phase_order.asc(),
-            WorkflowPhase.id.asc(),
-        )
-        .first()
-    )
-
-    if next_phase is None:
-        raise WorkflowConfigurationError(
-            f"No active workflow phase exists after "
-            f"'{current_phase.name}'."
-        )
-
-    return next_phase
-
-
-def create_initial_workflow_task(
-    offboarding_case: OffboardingCase,
-) -> WorkflowTask:
-    """
-    Create the initial workflow task for a new offboarding case.
-
-    This function does not commit the database transaction.
-    """
-
-    first_phase = get_first_active_phase()
-
-    department_email = validate_phase_assignment(
-        first_phase
-    )
-
-    assigned_at = utc_now()
-
-    task = WorkflowTask(
-        case=offboarding_case,
-        phase=first_phase,
-        assigned_to_email=department_email,
-        status="PENDING",
-        assigned_at=assigned_at,
-        due_at=assigned_at + timedelta(days=7),
-    )
-
-    offboarding_case.current_phase = first_phase
-    offboarding_case.status = "IN_PROGRESS"
-
-    db.session.add(task)
-
-    db.session.add(
-        AuditLog(
-            case=offboarding_case,
-            action="INITIAL_TASK_CREATED",
-            performed_by="System",
-            details=(
-                f"Initial workflow task created for phase "
-                f"'{first_phase.name}' and assigned to "
-                f"'{department_email}'."
+    return {
+        response.checklist_item_id: {
+            "response_status": response.response_status,
+            "reason": (
+                response.not_applicable_reason or ""
             ),
-        )
-    )
+        }
+        for response in task.responses
+    }
 
-    return task
 
+def record_task_opening(
+    task: WorkflowTask,
+) -> None:
+    """Record only the first time a workflow task is opened."""
 
-def create_next_workflow_task(
-    completed_task: WorkflowTask,
-) -> WorkflowTask:
-    """
-    Create the next departmental task after successful submission
-    of the current task.
+    if task.opened_at is not None:
+        return
 
-    This function does not commit the database transaction.
-    """
+    try:
+        task.opened_at = utc_now()
 
-    if (
-        completed_task.status != "SUBMITTED"
-        or completed_task.submitted_at is None
-    ):
-        raise WorkflowTransitionError(
-            "The current workflow task must be submitted "
-            "before the workflow can advance."
-        )
+        if task.status == "PENDING":
+            task.status = "IN_PROGRESS"
 
-    if completed_task.phase.is_final_approval:
-        raise WorkflowTransitionError(
-            "A final approval task cannot advance to another phase."
-        )
-
-    next_phase = get_next_active_phase(
-        completed_task.phase
-    )
-
-    department_email = validate_phase_assignment(
-        next_phase
-    )
-
-    existing_task = (
-        WorkflowTask.query
-        .filter_by(
-            case_id=completed_task.case_id,
-            phase_id=next_phase.id,
-        )
-        .first()
-    )
-
-    if existing_task is not None:
-        raise WorkflowTransitionError(
-            f"A workflow task for phase '{next_phase.name}' "
-            f"already exists for case "
-            f"{completed_task.case.case_number}."
+        db.session.add(
+            AuditLog(
+                case=task.case,
+                action="TASK_OPENED",
+                performed_by="System",
+                details=(
+                    f"Workflow task {task.id} was opened through "
+                    "its assigned task link. The user's identity "
+                    "has not yet been authenticated."
+                ),
+            )
         )
 
-    assigned_at = utc_now()
+        db.session.commit()
 
-    next_task = WorkflowTask(
-        case=completed_task.case,
-        phase=next_phase,
-        assigned_to_email=department_email,
-        status="PENDING",
-        assigned_at=assigned_at,
-        due_at=assigned_at + timedelta(days=7),
-    )
+    except SQLAlchemyError:
+        db.session.rollback()
 
-    completed_task.case.current_phase = next_phase
-    completed_task.case.status = "IN_PROGRESS"
+        current_app.logger.exception(
+            "Failed to record workflow task %s as opened.",
+            task.id,
+        )
 
-    db.session.add(next_task)
-
-    db.session.add(
-        AuditLog(
-            case=completed_task.case,
-            action="NEXT_TASK_CREATED",
-            performed_by="System",
-            details=(
-                f"Workflow advanced from phase "
-                f"'{completed_task.phase.name}' to "
-                f"'{next_phase.name}'. The new task was assigned "
-                f"to '{department_email}'."
+        flash(
+            (
+                "The task was loaded, but the system could not "
+                "record its opened timestamp."
             ),
+            "warning",
         )
+
+
+@workflow_bp.route(
+    "/tasks/<int:task_id>",
+    methods=["GET", "POST"],
+)
+def view_task(task_id):
+    """
+    Display and submit a departmental workflow checklist.
+
+    On successful submission:
+    - save the current checklist;
+    - mark the current task submitted;
+    - create the next workflow task;
+    - queue the next assignment notification;
+    - attempt notification delivery.
+    """
+
+    task = WorkflowTask.query.get_or_404(task_id)
+
+    record_task_opening(task)
+
+    form = WorkflowChecklistForm()
+
+    checklist_sections = build_checklist_sections(task)
+
+    submitted_values = build_saved_response_values(
+        task
     )
 
-    return next_task
+    validation_errors: dict[int, str] = {}
+
+    if request.method == "POST":
+
+        if task.status == "SUBMITTED":
+            flash(
+                "This workflow task has already been submitted.",
+                "warning",
+            )
+
+            return redirect(
+                url_for(
+                    "workflow.view_task",
+                    task_id=task.id,
+                )
+            )
+
+        if task.phase.is_final_approval:
+            flash(
+                (
+                    "Final approval tasks cannot be submitted "
+                    "through the departmental checklist form."
+                ),
+                "error",
+            )
+
+            return redirect(
+                url_for(
+                    "workflow.view_task",
+                    task_id=task.id,
+                )
+            )
+
+        if not checklist_sections:
+            flash(
+                (
+                    "This task cannot be submitted because no "
+                    "active checklist items are configured."
+                ),
+                "error",
+            )
+
+            return render_template(
+                "workflow/task_detail.html",
+                task=task,
+                form=form,
+                checklist_sections=checklist_sections,
+                submitted_values=submitted_values,
+                validation_errors=validation_errors,
+            )
+
+        if not form.validate_on_submit():
+            flash(
+                (
+                    "The form could not be validated. Refresh the "
+                    "page and submit the checklist again."
+                ),
+                "error",
+            )
+
+            return render_template(
+                "workflow/task_detail.html",
+                task=task,
+                form=form,
+                checklist_sections=checklist_sections,
+                submitted_values=submitted_values,
+                validation_errors=validation_errors,
+            )
+
+        submitted_values, validation_errors = (
+            validate_checklist_submission(
+                task=task,
+                form_data=request.form,
+            )
+        )
+
+        if validation_errors:
+            flash(
+                (
+                    "The checklist contains validation errors. "
+                    "Correct the listed items and submit again."
+                ),
+                "error",
+            )
+
+            return render_template(
+                "workflow/task_detail.html",
+                task=task,
+                form=form,
+                checklist_sections=checklist_sections,
+                submitted_values=submitted_values,
+                validation_errors=validation_errors,
+            )
+
+        # -----------------------------------------------------
+        # Transaction 1:
+        # Save the checklist and create the next task.
+        # -----------------------------------------------------
+        try:
+            response_count = persist_checklist_submission(
+                task=task,
+                submitted_values=submitted_values,
+                responded_by=task.assigned_to_email,
+            )
+
+            next_task = create_next_workflow_task(
+                completed_task=task,
+            )
+
+            notification = (
+                create_task_assignment_notification(
+                    next_task
+                )
+            )
+
+            db.session.commit()
+
+        except (
+            ChecklistSubmissionError,
+            WorkflowConfigurationError,
+            WorkflowTransitionError,
+        ) as exc:
+            db.session.rollback()
+
+            flash(
+                str(exc),
+                "error",
+            )
+
+            return render_template(
+                "workflow/task_detail.html",
+                task=task,
+                form=form,
+                checklist_sections=checklist_sections,
+                submitted_values=submitted_values,
+                validation_errors=validation_errors,
+            )
+
+        except SQLAlchemyError:
+            db.session.rollback()
+
+            current_app.logger.exception(
+                (
+                    "Database error while submitting task %s "
+                    "and advancing the workflow."
+                ),
+                task.id,
+            )
+
+            flash(
+                (
+                    "A database error occurred. The checklist was "
+                    "not submitted and the workflow was not advanced."
+                ),
+                "error",
+            )
+
+            return render_template(
+                "workflow/task_detail.html",
+                task=task,
+                form=form,
+                checklist_sections=checklist_sections,
+                submitted_values=submitted_values,
+                validation_errors=validation_errors,
+            )
+
+        # -----------------------------------------------------
+        # Transaction 2:
+        # Attempt delivery of the next task notification.
+        # -----------------------------------------------------
+        delivery_result = None
+
+        try:
+            delivery_result = (
+                deliver_task_assignment_notification(
+                    notification
+                )
+            )
+
+            db.session.commit()
+
+        except Exception:
+            db.session.rollback()
+
+            current_app.logger.exception(
+                (
+                    "The next workflow task was created, but its "
+                    "notification delivery result could not be saved."
+                )
+            )
+
+        # -----------------------------------------------------
+        # User feedback
+        # -----------------------------------------------------
+        if (
+            delivery_result is not None
+            and delivery_result.success
+        ):
+            flash(
+                (
+                    f"Checklist submitted successfully with "
+                    f"{response_count} responses. The workflow "
+                    f"advanced to '{next_task.phase.name}', and "
+                    "the next task notification was processed."
+                ),
+                "success",
+            )
+
+        else:
+            flash(
+                (
+                    f"Checklist submitted successfully with "
+                    f"{response_count} responses. The workflow "
+                    f"advanced to '{next_task.phase.name}', but "
+                    "the next task notification was not delivered "
+                    "successfully."
+                ),
+                "warning",
+            )
+
+        return redirect(
+            url_for(
+                "workflow.view_task",
+                task_id=task.id,
+            )
+        )
+
+    return render_template(
+        "workflow/task_detail.html",
+        task=task,
+        form=form,
+        checklist_sections=checklist_sections,
+        submitted_values=submitted_values,
+        validation_errors=validation_errors,
+    )
