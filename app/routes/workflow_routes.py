@@ -155,13 +155,14 @@ def render_task_detail(
     validation_errors: dict,
 ):
     """
-    Render the departmental task page with a consistent context.
+    Render the departmental task page with a consistent context.    
 
     All task-page responses should use this helper so presentation
     data is not accidentally omitted from validation-error paths.
     """
 
-    return render_task_detail(
+    return render_template(
+        'workflow/task_detail.html',
         task=task,
         form=form,
         checklist_sections=checklist_sections,
