@@ -18,6 +18,7 @@ from app.models import (
     AuditLog,
     WorkflowTask,
     utc_now,
+    WorkflowPhase
 )
 from app.services.checklist_service import (
     ChecklistSubmissionError,
