@@ -135,14 +135,15 @@ def create_case():
         )
 
     if delivery_result is not None and delivery_result.success:
-        flash(
-            (
-                f"Offboarding case {new_case.case_number} was created "
-                "successfully, and the initial task notification was "
-                "processed."
-            ),
-            "success",
-        )
+        # flash(
+        #     (
+        #         f"Offboarding case {new_case.case_number} was created "
+        #         "successfully, and the initial task notification was "
+        #         "processed."
+        #     ),
+        #     "success",
+        # )
+        pass
     else:
         flash(
             (
