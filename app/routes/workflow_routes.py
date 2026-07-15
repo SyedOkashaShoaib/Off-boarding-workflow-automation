@@ -161,8 +161,7 @@ def render_task_detail(
     data is not accidentally omitted from validation-error paths.
     """
 
-    return render_template(
-        "workflow/task_detail.html",
+    return render_task_detail(
         task=task,
         form=form,
         checklist_sections=checklist_sections,
@@ -288,8 +287,7 @@ def view_task(task_id):
                 "error",
             )
 
-            return render_template(
-                "workflow/task_detail.html",
+            return render_task_detail(
                 task=task,
                 form=form,
                 checklist_sections=checklist_sections,
@@ -306,8 +304,7 @@ def view_task(task_id):
                 "error",
             )
 
-            return render_template(
-                "workflow/task_detail.html",
+            return render_task_detail(
                 task=task,
                 form=form,
                 checklist_sections=checklist_sections,
@@ -331,8 +328,8 @@ def view_task(task_id):
                 "error",
             )
 
-            return render_template(
-                "workflow/task_detail.html",
+            return render_task_detail(
+                
                 task=task,
                 form=form,
                 checklist_sections=checklist_sections,
@@ -375,8 +372,7 @@ def view_task(task_id):
                 "error",
             )
 
-            return render_template(
-                "workflow/task_detail.html",
+            return render_task_detail(
                 task=task,
                 form=form,
                 checklist_sections=checklist_sections,
@@ -403,8 +399,7 @@ def view_task(task_id):
                 "error",
             )
 
-            return render_template(
-                "workflow/task_detail.html",
+            return render_task_detail(
                 task=task,
                 form=form,
                 checklist_sections=checklist_sections,
@@ -473,8 +468,7 @@ def view_task(task_id):
             )
         )
 
-    return render_template(
-        "workflow/task_detail.html",
+    return render_task_detail(
         task=task,
         form=form,
         checklist_sections=checklist_sections,
@@ -550,8 +544,8 @@ def admin_approval(task_id):
                 "error",
             )
 
-            return render_template(
-                "workflow/admin_approval.html",
+            return render_task_detail(
+            
                 task=task,
                 form=form,
                 prior_tasks=prior_tasks,
@@ -576,8 +570,8 @@ def admin_approval(task_id):
                 "error",
             )
 
-            return render_template(
-                "workflow/admin_approval.html",
+            return render_task_detail(
+            
                 task=task,
                 form=form,
                 prior_tasks=prior_tasks,
@@ -604,8 +598,8 @@ def admin_approval(task_id):
                 "error",
             )
 
-            return render_template(
-                "workflow/admin_approval.html",
+            return render_task_detail(
+                
                 task=task,
                 form=form,
                 prior_tasks=prior_tasks,
@@ -628,8 +622,8 @@ def admin_approval(task_id):
             )
         )
 
-    return render_template(
-        "workflow/admin_approval.html",
+    return render_task_detail(
+
         task=task,
         form=form,
         prior_tasks=prior_tasks,
