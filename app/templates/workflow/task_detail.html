@@ -248,53 +248,46 @@
          ===================================================== -->
     {% if submitted %}
 
+    <div
+        class="task-submitted-panel"
+        role="status"
+    >
+
         <div
-            class="task-submitted-panel"
-            role="status"
+            class="task-submitted-panel__icon"
+            aria-hidden="true"
         >
+            ✓
+        </div>
 
-            <div
-                class="task-submitted-panel__icon"
-                aria-hidden="true"
-            >
-                ✓
-            </div>
+        <div>
+            <h2>Checklist Submitted</h2>
 
-            <div>
-                <h2>Checklist Submitted</h2>
-
+            {% if task.submitted_at %}
                 <p>
-                    This task was submitted on
+                    Your department’s clearance responses were
+                    recorded successfully on
                     <strong>
                         {{ task.submitted_at.strftime(
                             "%d %B %Y, %I:%M %p"
                         ) }}
                     </strong>.
                 </p>
-
-                {% if (
-                    task.case.current_phase
-                    and task.case.current_phase_id
-                    != task.phase_id
-                ) %}
-
-                    <p>
-                        The workflow has advanced to
-                        <strong>
-                            {{ task.case.current_phase.name }}
-                        </strong>.
-                    </p>
-
-                {% endif %}
-
+            {% else %}
                 <p>
-                    The recorded responses are now read-only.
+                    Your department’s clearance responses were
+                    recorded successfully.
                 </p>
-            </div>
+            {% endif %}
 
+            <p>
+                This task is now read-only.
+            </p>
         </div>
 
-    {% endif %}
+    </div>
+
+{% endif %}
 
 
     <!-- =====================================================
