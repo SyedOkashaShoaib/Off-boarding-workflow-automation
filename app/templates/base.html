@@ -120,36 +120,30 @@
                             <li class="navigation-list__item">
 
                                 <a
-                                    href="{{ url_for(
-                                        'cases.create_case'
-                                    ) }}"
-                                    class="
-                                        navigation-link
+    href="{{ url_for('cases.create_case') }}"
+    class="
+        navigation-link
+        {% if current_endpoint == 'cases.create_case' %}
+            navigation-link--current
+        {% endif %}
+    "
+    title="Create a new offboarding case"
 
-                                        {% if current_endpoint
-                                            == 'cases.create_case' %}
-                                            navigation-link--current
-                                        {% endif %}
-                                    "
+    {% if current_endpoint == "cases.create_case" %}
+        aria-current="page"
+    {% endif %}
+>
+    <span
+        class="navigation-link__icon"
+        aria-hidden="true"
+    >
+        ＋
+    </span>
 
-                                    {% if current_endpoint
-                                        == "cases.create_case" %}
-                                        aria-current="page"
-                                    {% endif %}
-                                >
-
-                                    <span
-                                        class="navigation-link__icon"
-                                        aria-hidden="true"
-                                    >
-                                        ＋
-                                    </span>
-
-                                    <span>
-                                        Create new case
-                                    </span>
-
-                                </a>
+    <span class="navigation-link__label">
+        New Case
+    </span>
+</a>
 
                             </li>
 
