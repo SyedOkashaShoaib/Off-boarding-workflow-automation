@@ -240,7 +240,7 @@ textarea {
 }
 
 
-.application-header__name {
+/* .application-header__name {
     overflow: hidden;
     font-size: 16px;
     font-weight: 600;
@@ -248,10 +248,10 @@ textarea {
     text-overflow: ellipsis;
     text-shadow: 0 1px 1px rgba(14, 42, 61, 0.8);
     white-space: nowrap;
-}
+} */
 
 
-.application-header__subtitle {
+/* .application-header__subtitle {
     margin-top: 2px;
     overflow: hidden;
     color: rgba(255, 255, 255, 0.82);
@@ -259,7 +259,7 @@ textarea {
     line-height: 1.2;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
+} */
 
 
 .application-header__utilities {
