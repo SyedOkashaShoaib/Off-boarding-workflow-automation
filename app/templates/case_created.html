@@ -18,7 +18,7 @@
 <div class="confirmation-card">
 
     <div class="confirmation-heading">
-        <h2>{{ case.case_number }}</h2>
+        <h2>Offboarding Case Information</h2>
 
         <span class="status-badge status-success">
             {{ case.status }}
@@ -26,7 +26,12 @@
     </div>
 
     <div class="details-grid">
-
+        <div class="detail-item">
+            <span class="detail-label">Case Number</span>
+            <span class="detail-value">
+                {{ case.case_number }}
+            </span>
+        </div>
         <div class="detail-item">
             <span class="detail-label">Employee Name</span>
             <span class="detail-value">
@@ -42,7 +47,7 @@
         </div>
 
         <div class="detail-item">
-            <span class="detail-label">Designation</span>
+            <span class="detail-label">Employee Designation</span>
             <span class="detail-value">
                 {{ case.designation }}
             </span>
@@ -223,48 +228,33 @@
             </div>
         {% endif %}
 
-        {% if notification and notification.provider_message_id %}
+        <!-- {% if notification and notification.provider_message_id %}
             <div class="detail-item">
                 <span class="detail-label">Provider Reference</span>
                 <span class="detail-value">
                     {{ notification.provider_message_id }}
                 </span>
             </div>
-        {% endif %}
+        {% endif %} -->
 
     </div>
 
-    {% if notification_state == "FAILED" %}
-        <div class="notification-message notification-error">
-            The case and workflow task were created successfully, but
-            notification delivery failed. The failure has been recorded
-            and can be retried later.
-        </div>
+ {% if notification_state == "FAILED" %}
+    <div class="notification-message notification-error">
+        Notification delivery failed. The failure has been recorded
+        and can be retried.
+    </div>
 
-    {% elif notification_state == "PENDING" %}
-        <div class="notification-message">
-            The notification has been recorded and is awaiting a
-            delivery attempt.
-        </div>
+{% elif notification_state == "PENDING" %}
+    <div class="notification-message">
+        Notification delivery is still pending.
+    </div>
 
-    {% elif notification_state == "SENT" and backend | lower == "console" %}
-        <div class="notification-message">
-            The notification was processed successfully by the console
-            development backend. No email was delivered to an external
-            mailbox.
-        </div>
-
-    {% elif notification_state == "SENT" %}
-        <div class="notification-message">
-            The notification was accepted successfully by the configured
-            email service.
-        </div>
-
-    {% else %}
-        <div class="notification-message">
-            No notification record was found for this workflow task.
-        </div>
-    {% endif %}
+{% elif notification_state == "NOT RECORDED" %}
+    <div class="notification-message notification-error">
+        No notification record was found for this workflow task.
+    </div>
+{% endif %}
 
 </div>
 
