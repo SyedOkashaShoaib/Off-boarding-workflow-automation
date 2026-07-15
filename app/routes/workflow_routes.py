@@ -17,8 +17,7 @@ from app.forms.workflow_forms import (
 from app.models import (
     AuditLog,
     WorkflowTask,
-    utc_now,
-    WorkflowPhase
+    utc_now
 )
 from app.services.checklist_service import (
     ChecklistSubmissionError,
@@ -93,59 +92,59 @@ COMPLETED_TASK_STATUSES = {
 }
 
 
-def build_workflow_progress(
-    task: WorkflowTask,
-) -> list[dict]:
-    """
-    Build presentation data for the workflow progress indicator.
+# def build_workflow_progress(
+#     task: WorkflowTask,
+# ) -> list[dict]:
+#     """
+#     Build presentation data for the workflow progress indicator.
 
-    This keeps workflow-state calculations out of the Jinja
-    template while leaving the underlying workflow unchanged.
-    """
+#     This keeps workflow-state calculations out of the Jinja
+#     template while leaving the underlying workflow unchanged.
+#     """
 
-    active_phases = (
-        WorkflowPhase.query
-        .filter_by(is_active=True)
-        .order_by(
-            WorkflowPhase.phase_order.asc(),
-            WorkflowPhase.id.asc(),
-        )
-        .all()
-    )
+#     active_phases = (
+#         WorkflowPhase.query
+#         .filter_by(is_active=True)
+#         .order_by(
+#             WorkflowPhase.phase_order.asc(),
+#             WorkflowPhase.id.asc(),
+#         )
+#         .all()
+#     )
 
-    tasks_by_phase_id = {
-        case_task.phase_id: case_task
-        for case_task in task.case.tasks
-    }
+#     tasks_by_phase_id = {
+#         case_task.phase_id: case_task
+#         for case_task in task.case.tasks
+#     }
 
-    progress_items = []
+#     progress_items = []
 
-    for phase in active_phases:
-        phase_task = tasks_by_phase_id.get(phase.id)
+#     for phase in active_phases:
+#         phase_task = tasks_by_phase_id.get(phase.id)
 
-        if (
-            phase_task is not None
-            and phase_task.status in COMPLETED_TASK_STATUSES
-        ):
-            state = "completed"
+#         if (
+#             phase_task is not None
+#             and phase_task.status in COMPLETED_TASK_STATUSES
+#         ):
+#             state = "completed"
 
-        elif task.case.current_phase_id == phase.id:
-            state = "current"
+#         elif task.case.current_phase_id == phase.id:
+#             state = "current"
 
-        else:
-            state = "upcoming"
+#         else:
+#             state = "upcoming"
 
-        progress_items.append(
-            {
-                "phase": phase,
-                "task": phase_task,
-                "state": state,
-            }
-        )
+#         progress_items.append(
+#             {
+#                 "phase": phase,
+#                 "task": phase_task,
+#                 "state": state,
+#             }
+#         )
 
-    return progress_items
+#     return progress_items
 
-def render_admin_approgal(
+def render_admin_approval(
         *,
         task: WorkflowTask,
         form: AdminApprovalForm,
@@ -184,7 +183,7 @@ def render_task_detail(
         checklist_sections=checklist_sections,
         submitted_values=submitted_values,
         validation_errors=validation_errors,
-        workflow_progress=build_workflow_progress(task),
+        
     )
 
 def record_task_opening(
@@ -359,7 +358,7 @@ def view_task(task_id):
         # Save the checklist and create the next task.
         # -----------------------------------------------------
         try:
-            response_count = persist_checklist_submission(
+            persist_checklist_submission(
                 task=task,
                 submitted_values=submitted_values,
                 responded_by=task.assigned_to_email,
@@ -452,31 +451,6 @@ def view_task(task_id):
         # -----------------------------------------------------
         # User feedback
         # -----------------------------------------------------
-        if (
-            delivery_result is not None
-            and delivery_result.success
-        ):
-            flash(
-                (
-                    f"Checklist submitted successfully with "
-                    f"{response_count} responses. The workflow "
-                    f"advanced to '{next_task.phase.name}', and "
-                    "the next task notification was processed."
-                ),
-                "success",
-            )
-
-        else:
-            flash(
-                (
-                    f"Checklist submitted successfully with "
-                    f"{response_count} responses. The workflow "
-                    f"advanced to '{next_task.phase.name}', but "
-                    "the next task notification was not delivered "
-                    "successfully."
-                ),
-                "warning",
-            )
 
         return redirect(
             url_for(
@@ -561,13 +535,11 @@ def admin_approval(task_id):
                 "error",
             )
 
-            return render_task_detail(
-            
+            return render_admin_approval(
                 task=task,
-                form=form,
                 prior_tasks=prior_tasks,
                 completion_issues=completion_issues,
-                case_is_closed=case_is_closed,
+                case_is_closed=case_is_closed
             )
 
         try:
@@ -587,8 +559,8 @@ def admin_approval(task_id):
                 "error",
             )
 
-            return render_template(
-                'workflow/admin_approval.html',
+            return render_admin_approval(
+
                 task = task,
                 form = form,
                 prior_tasks=prior_tasks,
@@ -616,8 +588,8 @@ def admin_approval(task_id):
             )
 
 
-            return render_template(
-                'workflow/admin_approval.html',
+            return render_admin_approval(
+            
                 task = task,
                 form = form,
                 prior_tasks=prior_tasks,
@@ -625,13 +597,13 @@ def admin_approval(task_id):
                 case_is_closed=case_is_closed
             )
 
-        flash(
-            (
-                f"Offboarding case {task.case.case_number} was "
-                "approved and closed successfully."
-            ),
-            "success",
-        )
+        # flash(
+        #     (
+        #         f"Offboarding case {task.case.case_number} was "
+        #         "approved and closed successfully."
+        #     ),
+        #     "success",
+        # )
 
         return redirect(
             url_for(
@@ -641,8 +613,8 @@ def admin_approval(task_id):
         )
 
 
-    return render_template(
-                'workflow/admin_approval.html',
+    return render_admin_approval(
+                
                 task = task,
                 form = form,
                 prior_tasks=prior_tasks,
@@ -651,4 +623,3 @@ def admin_approval(task_id):
             )
 
 
-    
