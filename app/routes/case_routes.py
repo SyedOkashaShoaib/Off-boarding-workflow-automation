@@ -7,6 +7,7 @@ from flask import (
     redirect,
     render_template,
     url_for,
+    request,
 )
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -26,10 +27,15 @@ from app.services.workflow_service import (
     create_initial_workflow_task,
 )
 
-
+from app.services.case_query_service import (
+    get_case_register_data
+)
 case_bp = Blueprint("cases", __name__)
 
-
+@case_bp.get('/')
+def list_cases():
+    register= get_case_register_data(request.args)
+    return render_template('cases/index.html', register=register)
 def generate_case_number() -> str:
     current_year = datetime.now().year
 
