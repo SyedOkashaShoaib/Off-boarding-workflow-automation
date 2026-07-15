@@ -18,7 +18,7 @@
 <div class="confirmation-card">
 
     <div class="confirmation-heading">
-        <h2>{{ case.case_number }}</h2>
+        <h2>Offboarding Case Information</h2>
 
         <span class="status-badge status-success">
             {{ case.status }}
@@ -26,7 +26,12 @@
     </div>
 
     <div class="details-grid">
-
+        <div class="detail-item">
+            <span class="detail-label">Case Number</span>
+            <span class="detail-value">
+                {{ case.case_number }}
+            </span>
+        </div>
         <div class="detail-item">
             <span class="detail-label">Employee Name</span>
             <span class="detail-value">
@@ -42,7 +47,7 @@
         </div>
 
         <div class="detail-item">
-            <span class="detail-label">Designation</span>
+            <span class="detail-label">Employee Designation</span>
             <span class="detail-value">
                 {{ case.designation }}
             </span>
@@ -223,14 +228,14 @@
             </div>
         {% endif %}
 
-        {% if notification and notification.provider_message_id %}
+        <!-- {% if notification and notification.provider_message_id %}
             <div class="detail-item">
                 <span class="detail-label">Provider Reference</span>
                 <span class="detail-value">
                     {{ notification.provider_message_id }}
                 </span>
             </div>
-        {% endif %}
+        {% endif %} -->
 
     </div>
 
