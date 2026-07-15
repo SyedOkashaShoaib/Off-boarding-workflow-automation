@@ -568,9 +568,7 @@
                                 >
 
                                     <label
-                                        for="
-                                            reason_{{ checklist_item.id }}
-                                        "
+                                        for="reason_{{ checklist_item.id }}"
                                     >
                                         Reason for Not Applicable
                                     </label>
@@ -582,9 +580,7 @@
 
                                     <textarea
                                         id="reason_{{ checklist_item.id }}"
-                                        name="
-                                            reason_{{ checklist_item.id }}
-                                        "
+                                        name="reason_{{ checklist_item.id }}"
                                         rows="3"
                                         maxlength="2000"
                                         data-reason-input
@@ -596,9 +592,7 @@
                                 {% if item_error %}
 
                                     <p
-                                        id="
-                                            item-error-{{ checklist_item.id }}
-                                        "
+                                        id="item-error-{{ checklist_item.id }}"
                                         class="checklist-item__error"
                                     >
                                         {{ item_error }}

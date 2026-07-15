@@ -220,7 +220,7 @@
 }
 
 
-.workflow-progress {
+/* .workflow-progress {
     display: grid;
     grid-template-columns:
         repeat(4, minmax(0, 1fr));
@@ -328,7 +328,7 @@
 .workflow-progress__content span {
     color: var(--text-secondary);
     font-size: 11px;
-}
+} */
 
 
 .task-submitted-panel {
@@ -806,7 +806,7 @@
     }
 
 
-    .workflow-progress {
+    /* .workflow-progress {
         grid-template-columns: 1fr;
         gap: 10px;
     }
@@ -824,7 +824,7 @@
 
     .workflow-progress__content {
         background: transparent;
-    }
+    } */
 
 
     .checklist-actions {
