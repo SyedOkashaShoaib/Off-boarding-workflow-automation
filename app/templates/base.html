@@ -136,36 +136,37 @@
     </span>
 </a>
 
-                            </li>
                             <li class="navigation-list__item">
 
-   <a
-    href="{{ url_for('cases.list_cases') }}"
-    class="
-        navigation-link
-        {% current_endpoint=='cases.list_cases' %}
-            navigation-link--current
-        {% endif %}
+    <a
+        href="{{ url_for('cases.list_cases') }}"
+        class="
+            navigation-link
+            {% if current_endpoint == 'cases.list_cases' %}
+                navigation-link--current
+            {% endif %}
         "
-    title="Search and monitor offboarding cases"
-    {% if current_endpoint=='cases.list_cases' %}
-        aria-current="page"
-    {% endif %}
->
-    <span
-        class="navigation-link__icon"
-        aria-hidden="true"
+        title="Search and monitor offboarding cases"
+
+        {% if current_endpoint == "cases.list_cases" %}
+            aria-current="page"
+        {% endif %}
     >
-        
-    </span>
 
-    <span class="navigation-link__label">
-        Case
-    </span>
-</a>
+        <span
+            class="navigation-link__icon"
+            aria-hidden="true"
+        >
+            ▤
+        </span>
 
-                            </li>
+        <span class="navigation-link__label">
+            Cases
+        </span>
 
+    </a>
+
+</li>
                         </ul>
 
                     </section>
