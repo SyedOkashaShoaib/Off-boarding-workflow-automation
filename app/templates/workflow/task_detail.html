@@ -516,13 +516,10 @@
 
                                             <input
                                                 type="radio"
-                                                name="
-                                                    response_{{ checklist_item.id }}
-                                                "
+                                                name="response_{{ checklist_item.id }}"
                                                 value="YES"
 
-                                                {% if selected_response
-                                                    == "YES" %}
+                                                {% if selected_response == "YES" %}
                                                     checked
                                                 {% endif %}
 
@@ -544,13 +541,10 @@
 
                                             <input
                                                 type="radio"
-                                                name="
-                                                    response_{{ checklist_item.id }}
-                                                "
+                                                name="response_{{ checklist_item.id }}"
                                                 value="NOT_APPLICABLE"
 
-                                                {% if selected_response
-                                                    == "NOT_APPLICABLE" %}
+                                                {% if selected_response == "NOT_APPLICABLE" %}
                                                     checked
                                                 {% endif %}
 

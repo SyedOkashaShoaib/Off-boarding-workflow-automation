@@ -145,7 +145,23 @@ def build_workflow_progress(
 
     return progress_items
 
+def render_admin_approgal(
+        *,
+        task: WorkflowTask,
+        form: AdminApprovalForm,
+        prior_tasks: list,
+        completion_issues: list,
+        case_is_closed:bool,
+):
+    return render_template(
+        'workflow/admin_approval.html',
+        task = task,
+        form = form,
+        prior_tasks=prior_tasks,
+        completion_issues=completion_issues,
+        case_is_closed=case_is_closed
 
+    )
 def render_task_detail(
     *,
     task: WorkflowTask,
@@ -571,13 +587,13 @@ def admin_approval(task_id):
                 "error",
             )
 
-            return render_task_detail(
-            
-                task=task,
-                form=form,
+            return render_template(
+                'workflow/admin_approval.html',
+                task = task,
+                form = form,
                 prior_tasks=prior_tasks,
                 completion_issues=completion_issues,
-                case_is_closed=case_is_closed,
+                case_is_closed=case_is_closed
             )
 
         except SQLAlchemyError:
@@ -599,13 +615,14 @@ def admin_approval(task_id):
                 "error",
             )
 
-            return render_task_detail(
-                
-                task=task,
-                form=form,
+
+            return render_template(
+                'workflow/admin_approval.html',
+                task = task,
+                form = form,
                 prior_tasks=prior_tasks,
                 completion_issues=completion_issues,
-                case_is_closed=case_is_closed,
+                case_is_closed=case_is_closed
             )
 
         flash(
@@ -623,14 +640,15 @@ def admin_approval(task_id):
             )
         )
 
-    return render_task_detail(
 
-        task=task,
-        form=form,
-        prior_tasks=prior_tasks,
-        completion_issues=completion_issues,
-        case_is_closed=case_is_closed,
-    )
+    return render_template(
+                'workflow/admin_approval.html',
+                task = task,
+                form = form,
+                prior_tasks=prior_tasks,
+                completion_issues=completion_issues,
+                case_is_closed=case_is_closed
+            )
 
 
     
