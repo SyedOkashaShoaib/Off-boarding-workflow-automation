@@ -87,7 +87,89 @@ def build_saved_response_values(
         }
         for response in task.responses
     }
+COMPLETED_TASK_STATUSES = {
+    "SUBMITTED",
+    "APPROVED",
+}
 
+
+def build_workflow_progress(
+    task: WorkflowTask,
+) -> list[dict]:
+    """
+    Build presentation data for the workflow progress indicator.
+
+    This keeps workflow-state calculations out of the Jinja
+    template while leaving the underlying workflow unchanged.
+    """
+
+    active_phases = (
+        WorkflowPhase.query
+        .filter_by(is_active=True)
+        .order_by(
+            WorkflowPhase.phase_order.asc(),
+            WorkflowPhase.id.asc(),
+        )
+        .all()
+    )
+
+    tasks_by_phase_id = {
+        case_task.phase_id: case_task
+        for case_task in task.case.tasks
+    }
+
+    progress_items = []
+
+    for phase in active_phases:
+        phase_task = tasks_by_phase_id.get(phase.id)
+
+        if (
+            phase_task is not None
+            and phase_task.status in COMPLETED_TASK_STATUSES
+        ):
+            state = "completed"
+
+        elif task.case.current_phase_id == phase.id:
+            state = "current"
+
+        else:
+            state = "upcoming"
+
+        progress_items.append(
+            {
+                "phase": phase,
+                "task": phase_task,
+                "state": state,
+            }
+        )
+
+    return progress_items
+
+
+def render_task_detail(
+    *,
+    task: WorkflowTask,
+    form: WorkflowChecklistForm,
+    checklist_sections: dict,
+    submitted_values: dict,
+    validation_errors: dict,
+):
+    """
+    Render the departmental task page with a consistent context.
+
+    All task-page responses should use this helper so presentation
+    data is not accidentally omitted from validation-error paths.
+    """
+
+    return render_template(
+        "workflow/task_detail.html",
+        task=task,
+        form=form,
+        checklist_sections=checklist_sections,
+        submitted_values=submitted_values,
+        validation_errors=validation_errors,
+        workflow_progress=build_workflow_progress(task),
+    )
 
 def record_task_opening(
     task: WorkflowTask,
