@@ -119,19 +119,10 @@
 
                             <li class="navigation-list__item">
 
-                                <a
+   <a
     href="{{ url_for('cases.create_case') }}"
-    class="
-        navigation-link
-        {% if current_endpoint == 'cases.create_case' %}
-            navigation-link--current
-        {% endif %}
-    "
+    class="navigation-link"
     title="Create a new offboarding case"
-
-    {% if current_endpoint == "cases.create_case" %}
-        aria-current="page"
-    {% endif %}
 >
     <span
         class="navigation-link__icon"
