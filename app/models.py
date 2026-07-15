@@ -93,7 +93,7 @@ class OffboardingCase(db.Model):
             "status",
         ),
         db.Index(
-            "ix_boarding_case_employee_id",
+            "ix_offboarding_case_employee_id",
             "employee_id",
         ),
 
