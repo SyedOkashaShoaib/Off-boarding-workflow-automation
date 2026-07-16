@@ -27,6 +27,28 @@ def environment_flag(
         "on",
     }
 
+def environment_positive_integer(
+    name: str,
+    default: int,
+) -> int:
+    """
+    Parse a positive integer environment variable safely.
+    """
+
+    raw_value = os.environ.get(name)
+
+    if raw_value is None:
+        return default
+
+    try:
+        parsed_value = int(raw_value)
+    except (TypeError, ValueError):
+        return default
+
+    if parsed_value < 1:
+        return default
+
+    return parsed_value
 
 class Config:
     SECRET_KEY = os.environ.get(
