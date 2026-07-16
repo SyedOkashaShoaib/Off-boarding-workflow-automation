@@ -401,6 +401,11 @@ class WorkflowTask(db.Model):
         cascade="all, delete-orphan"
     )
     notifications= db.relationship("EmailNotification", back_populates='workflow_task', cascade='all, delete-orphan')
+access_grants = db.relationship(
+    "TaskAccessGrant",
+    back_populates="workflow_task",
+    cascade="all, delete-orphan",
+)
     def __repr__(self):
         return f"<WorkflowTask Case={self.case_id} Phase={self.phase_id} Status={self.status}>"
 
