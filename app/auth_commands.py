@@ -77,9 +77,9 @@ def create_portal_user_command(
             "Full name is required."
         )
 
-    if len(password) < 12:
+    if len(password) < 3:
         raise click.ClickException(
-            "Password must contain at least 12 characters."
+            "Password must contain at least 3 characters."
         )
 
     existing_user = (
