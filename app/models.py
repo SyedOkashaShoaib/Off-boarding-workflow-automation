@@ -81,7 +81,23 @@ class ChecklistItem(db.Model):
 
 class OffboardingCase(db.Model):
     __tablename__ = "offboarding_cases"
+    __table_args__=(
+        db.Index(
+        "ix_offboarding_case_status_updated_at",
+        "status",
+        "updated_at",
+    ),
+        db.Index(
+            "ix_offboarding_case_current_phase_status",
+            "current_phase_id",
+            "status",
+        ),
+        db.Index(
+            "ix_offboarding_case_employee_id",
+            "employee_id",
+        ),
 
+    )
     id = db.Column(db.Integer, primary_key=True)
 
     case_number = db.Column(db.String(50), unique=True, nullable=False)
@@ -143,7 +159,19 @@ class OffboardingCase(db.Model):
 
 class WorkflowTask(db.Model):
     __tablename__ = "workflow_tasks"
-
+    __table_args__= (
+        db.UniqueConstraint(
+            "case_id",
+            "phase_id",
+            name="uq_workflow_tasks_case_phase",
+        ),
+        db.Index(
+            "ix_workflow_tasks_status_due_at",
+            "status",
+            "due_at",
+        ),
+        
+    )
     id = db.Column(db.Integer, primary_key=True)
 
     case_id = db.Column(
@@ -240,7 +268,13 @@ class ChecklistResponse(db.Model):
 
 class AuditLog(db.Model):
     __tablename__ = "audit_logs"
-
+    __table_args__ = (
+        db.Index(
+            "ix_audit_log_case_created_at",
+            "case_id",
+            "created_at",
+        ),
+    )
     id = db.Column(db.Integer, primary_key=True)
 
     case_id = db.Column(
@@ -267,7 +301,14 @@ class AuditLog(db.Model):
 
 class EmailNotification(db.Model):
     __tablename__ = 'email_notifications'
-
+    __table_args__=(
+        db.Index("ix_email_notifications_case_status",
+                 "case_id",
+                 "status",),
+        db.Index("ix_email_notifications_task_type",
+                 "workflow_task_id",
+                 "notification_type",),
+    )
     id = db.Column(db.Integer, primary_key=True)
     case_id = db.Column(db.Integer, db.ForeignKey('offboarding_cases.id'), nullable=False)
     workflow_task_id = db.Column(db.Integer, db.ForeignKey('workflow_tasks.id'), nullable=False)
