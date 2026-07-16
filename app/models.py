@@ -1,11 +1,25 @@
 from datetime import datetime, timedelta, timezone
-
+from flask_login import UserMixin
 from app.extension import db
+from sqlalchemy.orm import validates
+from werkzeug.security import (
+    check_password_hash,
+    generate_password_hash,
+)
 
 
 def utc_now():
     return datetime.now(timezone.utc)
 
+ROLE_NOC_OPERATOR = "NOC_OPERATOR"
+ROLE_FINAL_APPROVER = 'FINAL_APPROVER'
+ROLE_SYSTEM_ADMIN = 'SYSTEM_ADMIN'
+
+PORTAL_ROLES = (
+    ROLE_NOC_OPERATOR,
+    ROLE_FINAL_APPROVER,
+    ROLE_SYSTEM_ADMIN
+)
 
 class Department(db.Model):
     __tablename__ = "departments"
