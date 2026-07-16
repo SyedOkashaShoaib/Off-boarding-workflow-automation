@@ -408,7 +408,89 @@ access_grants = db.relationship(
 )
     def __repr__(self):
         return f"<WorkflowTask Case={self.case_id} Phase={self.phase_id} Status={self.status}>"
+class TaskAccessGrant(db.Model):
+    """
+    Secure access grant for one departmental workflow task.
 
+    The raw token is sent through email but is never stored in the
+    database. Only its SHA-256 digest is persisted.
+    """
+
+    __tablename__ = "task_access_grants"
+
+    __table_args__ = (
+        db.Index(
+            "ix_task_access_grants_task_state",
+            "workflow_task_id",
+            "revoked_at",
+            "consumed_at",
+        ),
+    )
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
+
+    workflow_task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("workflow_tasks.id"),
+        nullable=False,
+    )
+
+    token_hash = db.Column(
+        db.String(64),
+        unique=True,
+        nullable=False,
+    )
+
+    recipient_email = db.Column(
+        db.String(254),
+        nullable=False,
+    )
+
+    expires_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+    last_accessed_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    access_count = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+
+    consumed_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    revoked_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    workflow_task = db.relationship(
+        "WorkflowTask",
+        back_populates="access_grants",
+    )
+
+    def __repr__(self):
+        return (
+            f"<TaskAccessGrant id={self.id} "
+            f"task={self.workflow_task_id}>"
+        )
 
 class ChecklistResponse(db.Model):
     __tablename__ = "checklist_responses"
