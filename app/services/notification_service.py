@@ -119,7 +119,37 @@ def deliver_task_assignment_notification(
     """
 
     task = notification.workflow_task
-    task_url = build_task_url(task)
+access_grant = None
+
+department_name = (
+    task.phase.department.name
+    or ""
+).strip().upper()
+
+requires_portal_login = (
+    task.phase.is_final_approval
+    or department_name == "NOC"
+)
+
+if requires_portal_login:
+    task_url = build_portal_task_url(
+        task
+    )
+
+else:
+    (
+        access_grant,
+        raw_token,
+    ) = issue_task_access_grant(
+        task=task,
+        recipient_email=(
+            notification.recipient_email
+        ),
+    )
+
+    task_url = build_task_access_url(
+        raw_token
+    )
 
     due_at_text = task.due_at.strftime(
         "%d %B %Y, %I:%M %p"
