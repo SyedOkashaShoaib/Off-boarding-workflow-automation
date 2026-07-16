@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 from dotenv import load_dotenv
 
@@ -6,11 +7,36 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def environment_flag(
+    name: str,
+    default: bool = False,
+) -> bool:
+    """
+    Parse a boolean environment variable safely.
+    """
+
+    raw_value = os.environ.get(name)
+
+    if raw_value is None:
+        return default
+
+    return raw_value.strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 class Config:
     SECRET_KEY = os.environ.get(
-        "SECRET_KEY",
-        "development-secret-key",
+        "SECRET_KEY"
     )
+
+    if not SECRET_KEY:
+        raise RuntimeError(
+            "SECRET_KEY must be configured in the environment."
+        )
 
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "DATABASE_URL",
@@ -29,7 +55,32 @@ class Config:
         "http://127.0.0.1:5000",
     )
 
-    ENVIRONMENT_LABEL = os.getenv(
+    ENVIRONMENT_LABEL = os.environ.get(
         "ENVIRONMENT_LABEL",
-        "Development"
+        "Development",
+    )
+
+    # Session cookie cannot be accessed through JavaScript.
+    SESSION_COOKIE_HTTPONLY = True
+
+    # Appropriate default for a conventional internal application.
+    SESSION_COOKIE_SAMESITE = "Lax"
+
+    # False for local HTTP development; must be true behind
+    # production HTTPS.
+    SESSION_COOKIE_SECURE = environment_flag(
+        "SESSION_COOKIE_SECURE",
+        default=False,
+    )
+
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+
+    REMEMBER_COOKIE_SECURE = environment_flag(
+        "SESSION_COOKIE_SECURE",
+        default=False,
+    )
+
+    PERMANENT_SESSION_LIFETIME = timedelta(
+        hours=8
     )
