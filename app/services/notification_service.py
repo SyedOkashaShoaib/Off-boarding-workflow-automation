@@ -19,12 +19,54 @@ from app.services.task_access_service import (
     revoke_active_task_grants
 )
 
-def build_task_url(task: WorkflowTask) -> str:
-    base_url = current_app.config["APP_BASE_URL"].rstrip("/") + "/"
-    relative_path = f"workflow/tasks/{task.id}"
+def build_absolute_url(
+    relative_path: str,
+) -> str:
+    base_url = (
+        current_app.config[
+            "APP_BASE_URL"
+        ].rstrip("/")
+        + "/"
+    )
 
-    return urljoin(base_url, relative_path)
+    return urljoin(
+        base_url,
+        relative_path.lstrip("/"),
+    )
 
+
+def build_portal_task_url(
+    task: WorkflowTask,
+) -> str:
+    """
+    Build a portal-authenticated task URL.
+    """
+
+    if task.phase.is_final_approval:
+        relative_path = (
+            f"workflow/tasks/"
+            f"{task.id}/approval"
+        )
+    else:
+        relative_path = (
+            f"workflow/tasks/{task.id}"
+        )
+
+    return build_absolute_url(
+        relative_path
+    )
+
+
+def build_task_access_url(
+    raw_token: str,
+) -> str:
+    """
+    Build the secure departmental email link.
+    """
+
+    return build_absolute_url(
+        f"task-access/{raw_token}"
+    )
 
 def create_task_assignment_notification(
     task: WorkflowTask,
