@@ -54,6 +54,12 @@ workflow_bp = Blueprint(
     url_prefix="/workflow",
 )
 
+@workflow_bp.after_request
+def secure_workflow_response(response):
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["Referrer-Policy"] = "no-referrer"
+
+    return response
 
 def build_checklist_sections(
     task: WorkflowTask,
@@ -197,6 +203,7 @@ def render_task_detail(
 
 def record_task_opening(
     task: WorkflowTask,
+    actor: str,
 ) -> None:
     """Record only the first time a workflow task is opened."""
 
@@ -213,11 +220,10 @@ def record_task_opening(
             AuditLog(
                 case=task.case,
                 action="TASK_OPENED",
-                performed_by="System",
+                performed_by=actor,
                 details=(
-                    f"Workflow task {task.id} was opened through "
-                    "its assigned task link. The user's identity "
-                    "has not yet been authenticated."
+                    f"Workflow task {task.id} was opened. "
+                   
                 ),
             )
         )
@@ -240,7 +246,55 @@ def record_task_opening(
             "warning",
         )
 
+def authorize_department_task(
+    task: WorkflowTask,
+):
+    """
+    Authorize access to a departmental checklist.
 
+    NOC tasks require a portal account. Other departments require
+    the secure task-specific session established from the email link.
+    """
+
+    department_name = (
+        task.phase.department.name
+        or ""
+    ).strip().upper()
+
+    if department_name == "NOC":
+
+        if not current_user.is_authenticated:
+            return redirect(
+                url_for(
+                    "auth.login",
+                    next=request.full_path,
+                )
+            )
+
+        if not current_user.has_role(
+            ROLE_NOC_OPERATOR,
+            ROLE_SYSTEM_ADMIN,
+        ):
+            abort(403)
+
+        return None
+
+    grant = get_session_grant_for_task(
+        task,
+        allow_consumed_read_only=(
+            request.method == "GET"
+        ),
+    )
+
+    if grant is None:
+        return (
+            render_template(
+                "task_access/unavailable.html"
+            ),
+            404,
+        )
+
+    return None
 
 @workflow_bp.route(
     "/tasks/<int:task_id>",
@@ -262,7 +316,21 @@ def view_task(task_id):
 
     if task.phase.is_final_approval:
         return redirect(url_for("workflow.admin_approval", task_id = task.id))
-    record_task_opening(task)
+    access_response=authorize_department_task(task)
+    if access_response is not None:
+        return access_response
+    department_name = (
+        task.phase.department.name
+        or ""
+    ).strip().upper()
+    if department_name == 'NOC':
+        task_actor = current_user.email
+    else:
+        task_actor = (
+            get_task_access_actor 
+            or task.assigned_to_emailss
+        )
+    record_task_opening(task, task_actor)
     form = WorkflowChecklistForm()
 
     checklist_sections = build_checklist_sections(task)
@@ -371,13 +439,13 @@ def view_task(task_id):
             persist_checklist_submission(
                 task=task,
                 submitted_values=submitted_values,
-                responded_by=task.assigned_to_email,
+                responded_by=task_actor,
             )
 
             next_task = create_next_workflow_task(
                 completed_task=task,
             )
-
+            consume_task_access_grants(task)
             notification = (
                 create_task_assignment_notification(
                     next_task
@@ -496,7 +564,7 @@ def admin_approval(task_id):
             )
         )
 
-    record_task_opening(task)
+    record_task_opening(task, current_user.email)
 
     form = AdminApprovalForm()
 

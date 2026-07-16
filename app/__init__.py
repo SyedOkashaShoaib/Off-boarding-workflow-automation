@@ -71,6 +71,7 @@ def create_app() -> Flask:
     from app.routes.main_routes import main_bp
     from app.routes.workflow_routes import workflow_bp
     from app.routes.auth_routes import auth_bp
+    from app.routes.task_access_route import task_access_bp
     app.register_blueprint(
         case_bp,
         url_prefix="/cases",
@@ -78,7 +79,7 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(workflow_bp)
-
+    app.register_blueprint(task_access_bp)
     # --------------------------------------------------------
     # CLI commands
     # --------------------------------------------------------
