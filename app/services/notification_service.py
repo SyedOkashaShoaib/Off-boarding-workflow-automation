@@ -14,7 +14,10 @@ from app.services.email_service import (
     EmailResult,
     get_email_service,
 )
-
+from app.services.task_access_service import (
+    issue_task_access_grant,
+    revoke_active_task_grants
+)
 
 def build_task_url(task: WorkflowTask) -> str:
     base_url = current_app.config["APP_BASE_URL"].rstrip("/") + "/"
