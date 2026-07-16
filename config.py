@@ -81,7 +81,12 @@ class Config:
         "ENVIRONMENT_LABEL",
         "Development",
     )
-
+    TASK_ACCESS_TOKEN_LIFETIME_HOURS= (
+        environment_positive_integer(
+            "TASK_ACCESS_TOKEN_LIFETIME_HOURS",
+            default=336, #14 days. 
+        )
+    )
     # Session cookie cannot be accessed through JavaScript.
     SESSION_COOKIE_HTTPONLY = True
 
