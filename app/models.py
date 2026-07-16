@@ -400,8 +400,11 @@ class WorkflowTask(db.Model):
         back_populates="workflow_task",
         cascade="all, delete-orphan"
     )
-    notifications= db.relationship("EmailNotification", back_populates='workflow_task', cascade='all, delete-orphan')
-access_grants = db.relationship(
+    notifications= db.relationship(
+        "EmailNotification", 
+        back_populates='workflow_task', 
+        cascade='all, delete-orphan')
+    access_grants = db.relationship(
     "TaskAccessGrant",
     back_populates="workflow_task",
     cascade="all, delete-orphan",
