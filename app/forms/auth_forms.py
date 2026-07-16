@@ -63,3 +63,12 @@ class LogoutForm(FlaskForm):
     """
 
     submit = SubmitField("Sign Out")
+
+class TaskAccessContinueForm(FlaskForm):
+    """
+    Confirm that a human user intends to open the assigned task.
+    """
+
+    submit = SubmitField(
+        "Open Assigned Task"
+    )
