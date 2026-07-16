@@ -77,7 +77,7 @@ def create_portal_user_command(
             "Full name is required."
         )
 
-    if len(password) < 3:
+    if len(password) < 3: #change this later on.... :)
         raise click.ClickException(
             "Password must contain at least 3 characters."
         )

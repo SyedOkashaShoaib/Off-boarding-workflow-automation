@@ -7,6 +7,7 @@ from flask import (
     request,
     url_for,
 )
+from flask_login import login_required
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extension import db
@@ -470,6 +471,7 @@ def view_task(task_id):
     "/tasks/<int:task_id>/approval",
     methods=["GET", "POST"],
 )
+@login_required
 def admin_approval(task_id):
     """
     Display and process the final Admin approval task.

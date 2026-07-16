@@ -70,12 +70,12 @@ def create_app() -> Flask:
     from app.routes.case_routes import case_bp
     from app.routes.main_routes import main_bp
     from app.routes.workflow_routes import workflow_bp
-
+    from app.routes.auth_routes import auth_bp
     app.register_blueprint(
         case_bp,
         url_prefix="/cases",
     )
-
+    app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(workflow_bp)
 
@@ -95,5 +95,11 @@ def create_app() -> Flask:
     app.cli.add_command(
         create_portal_user_command
     )
+    from app.forms.auth_forms import LogoutForm
 
+    @app.context_processor
+    def inject_portal_forms():
+        return {
+            "logout_form":LogoutForm(),
+        }
     return app

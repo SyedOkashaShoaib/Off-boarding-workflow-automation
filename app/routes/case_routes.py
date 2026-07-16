@@ -9,6 +9,11 @@ from flask import (
     url_for,
     request,
 )
+
+from flask_login import (
+    current_user,
+    login_required,
+)
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extension import db
@@ -32,7 +37,8 @@ from app.services.case_query_service import (
 )
 case_bp = Blueprint("cases", __name__)
 
-@case_bp.get('/')
+@case_bp.get("/")
+@login_required
 def list_cases():
     register= get_case_register_data(request.args)
     return render_template('cases/index.html', register=register)
@@ -51,6 +57,7 @@ def generate_case_number() -> str:
 
 
 @case_bp.route("/create", methods=["GET", "POST"])
+@login_required
 def create_case():
     form = Case_Form()
 
@@ -70,7 +77,7 @@ def create_case():
             last_working_day=form.last_date.data,
             line_manager=form.line_manager.data.strip(),
             status="CREATED",
-            created_by="NOC",
+            created_by=current_user.email,
         )
 
         db.session.add(new_case)
@@ -169,6 +176,7 @@ def create_case():
 
 
 @case_bp.route("/<int:case_id>/created")
+@login_required
 def case_created(case_id):
     case = OffboardingCase.query.get_or_404(case_id)
 
