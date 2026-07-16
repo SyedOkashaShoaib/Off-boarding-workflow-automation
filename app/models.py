@@ -20,7 +20,181 @@ PORTAL_ROLES = (
     ROLE_FINAL_APPROVER,
     ROLE_SYSTEM_ADMIN,
 )
+class User(UserMixin, db.Model):
+    """
+    Authenticated portal user.
 
+    Departmental task recipients will use separate task-specific
+    access grants later and are not represented by this model unless
+    they are also authorised portal users.
+    """
+
+    __tablename__ = "users"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
+
+    email = db.Column(
+        db.String(254),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    full_name = db.Column(
+        db.String(150),
+        nullable=False,
+    )
+
+    password_hash = db.Column(
+        db.String(512),
+        nullable=False,
+    )
+
+    role = db.Column(
+        db.String(50),
+        nullable=False,
+        default=ROLE_NOC_OPERATOR,
+    )
+
+    active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    last_login_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+    @property
+    def is_active(self) -> bool:
+        """
+        Flask-Login uses this property to determine whether the
+        account is permitted to establish an authenticated session.
+        """
+
+        return bool(self.active)
+
+    @staticmethod
+    def normalize_email(value: str) -> str:
+        """
+        Return the canonical representation used for login and
+        uniqueness checks.
+        """
+
+        return str(value or "").strip().lower()
+
+    @validates("email")
+    def validate_email(
+        self,
+        key: str,
+        value: str,
+    ) -> str:
+        """
+        Normalize portal email addresses before persistence.
+        """
+
+        normalized_email = self.normalize_email(value)
+
+        if not normalized_email:
+            raise ValueError(
+                "A portal user email address is required."
+            )
+
+        return normalized_email
+
+    @validates("role")
+    def validate_role(
+        self,
+        key: str,
+        value: str,
+    ) -> str:
+        """
+        Reject unsupported portal roles.
+        """
+
+        normalized_role = str(value or "").strip().upper()
+
+        if normalized_role not in PORTAL_ROLES:
+            raise ValueError(
+                f"Unsupported portal role: {normalized_role}"
+            )
+
+        return normalized_role
+
+    def set_password(
+        self,
+        password: str,
+    ) -> None:
+        """
+        Hash and store a plaintext password.
+
+        Plaintext passwords must never be stored in the database.
+        """
+
+        if not password:
+            raise ValueError(
+                "A password is required."
+            )
+
+        self.password_hash = generate_password_hash(
+            password
+        )
+
+    def check_password(
+        self,
+        password: str,
+    ) -> bool:
+        """
+        Compare a submitted password with the stored hash.
+        """
+
+        if not password or not self.password_hash:
+            return False
+
+        return check_password_hash(
+            self.password_hash,
+            password,
+        )
+
+    def has_role(
+        self,
+        *roles: str,
+    ) -> bool:
+        """
+        Return whether this user has one of the supplied roles.
+        """
+
+        normalized_roles = {
+            str(role).strip().upper()
+            for role in roles
+        }
+
+        return self.role in normalized_roles
+
+    def __repr__(self) -> str:
+        return (
+            f"<User id={self.id} "
+            f"email={self.email!r} "
+            f"role={self.role!r}>"
+        )
 class Department(db.Model):
     __tablename__ = "departments"
 
