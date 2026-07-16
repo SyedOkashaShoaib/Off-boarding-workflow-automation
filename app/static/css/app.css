@@ -1217,7 +1217,9 @@ tbody tr:hover {
         align-items: flex-start;
         padding: 10px 12px;
     }
-
+    .portal-user {
+        display : None
+    }
 
     .application-header__name {
         white-space: normal;
