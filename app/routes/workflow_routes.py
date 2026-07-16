@@ -7,6 +7,8 @@ from flask import (
     request,
     url_for,
 )
+from flask import abort
+from flask_login import current_user
 from flask_login import login_required
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -18,7 +20,9 @@ from app.forms.workflow_forms import (
 from app.models import (
     AuditLog,
     WorkflowTask,
-    utc_now
+    utc_now,
+    ROLE_NOC_OPERATOR,
+    ROLE_SYSTEM_ADMIN,
 )
 from app.services.checklist_service import (
     ChecklistSubmissionError,
@@ -39,7 +43,11 @@ from app.services.approval_service import (
     approve_and_close_case,
     get_prior_phase_completion_issues,
 )
-
+from app.services.task_access_service import (
+    consume_task_access_grants,
+    get_session_grant_for_task,
+    get_task_access_actor,
+)
 workflow_bp = Blueprint(
     "workflow",
     __name__,
@@ -232,55 +240,8 @@ def record_task_opening(
             "warning",
         )
 
-def authorize_department_task(
-    task: WorkflowTask,
-):
-    """
-    Authorize access to a departmental checklist.
 
-    NOC tasks require a portal account. Other departments require
-    the secure task-specific session established from the email link.
-    """
 
-    department_name = (
-        task.phase.department.name
-        or ""
-    ).strip().upper()
-
-    if department_name == "NOC":
-
-        if not current_user.is_authenticated:
-            return redirect(
-                url_for(
-                    "auth.login",
-                    next=request.full_path,
-                )
-            )
-
-        if not current_user.has_role(
-            ROLE_NOC_OPERATOR,
-            ROLE_SYSTEM_ADMIN,
-        ):
-            abort(403)
-
-        return None
-
-    grant = get_session_grant_for_task(
-        task,
-        allow_consumed_read_only=(
-            request.method == "GET"
-        ),
-    )
-
-    if grant is None:
-        return (
-            render_template(
-                "task_access/unavailable.html"
-            ),
-            404,
-        )
-
-    return None
 @workflow_bp.route(
     "/tasks/<int:task_id>",
     methods=["GET", "POST"],
