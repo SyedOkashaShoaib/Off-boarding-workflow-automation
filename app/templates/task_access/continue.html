@@ -1,108 +1,87 @@
-<!doctype html>
-
-<html lang="en">
-
-<head>
-    <meta charset="utf-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1"
-    >
-
-    <title>
-        {% block title %}
-            Department Task
-        {% endblock %}
-    </title>
-
-    <link
-        rel="stylesheet"
-        href="{{ url_for(
-            'static',
-            filename='css/app.css'
-        ) }}"
-    >
-
-    <link
-        rel="stylesheet"
-        href="{{ url_for(
-            'static',
-            filename='css/pages/task_access.css'
-        ) }}"
-    >
-
-    {% block head %}{% endblock %}
-</head>
+{% extends "layouts/task_base.html" %}
 
 
-<body class="task-access-body">
-
-    <a
-        class="skip-link"
-        href="#main-content"
-    >
-        Skip to main content
-    </a>
+{% block title %}
+    Open Assigned Task
+{% endblock %}
 
 
-    <header class="task-access-header">
+{% block content %}
+
+<section class="task-access-card">
+
+    <h1>Departmental Clearance Assignment</h1>
+
+    <p>
+        Confirm that you want to open the assigned
+        employee offboarding task.
+    </p>
+
+
+    <dl class="task-access-summary">
 
         <div>
-            <div class="task-access-header__company">
-                Barrett Hodgson
-            </div>
-
-            <div class="task-access-header__system">
-                Offboarding Workflow System
-            </div>
+            <dt>Case Number</dt>
+            <dd>{{ task.case.case_number }}</dd>
         </div>
 
-    </header>
+        <div>
+            <dt>Employee</dt>
+            <dd>{{ task.case.employee_name }}</dd>
+        </div>
+
+        <div>
+            <dt>Responsible Department</dt>
+            <dd>{{ task.phase.department.name }}</dd>
+        </div>
+
+        <div>
+            <dt>Assigned Task</dt>
+            <dd>{{ task.phase.name }}</dd>
+        </div>
+
+        <div>
+            <dt>Due Date</dt>
+            <dd>
+                {% if task.due_at %}
+                    {{ task.due_at.strftime(
+                        "%d %B %Y, %I:%M %p"
+                    ) }}
+                {% else %}
+                    Not recorded
+                {% endif %}
+            </dd>
+        </div>
+
+    </dl>
 
 
-    <main
-        id="main-content"
-        class="task-access-workspace"
+    <div class="task-access-warning">
+
+        <strong>Secure assignment link</strong>
+
+        <p>
+            This link provides access only to this task.
+            Do not forward or share it.
+        </p>
+
+    </div>
+
+
+    <form
+        method="post"
+        action="{{ url_for(
+            'task_access.continue_to_task'
+        ) }}"
+        class="task-access-form"
     >
+        {{ form.hidden_tag() }}
 
-        {% with messages = get_flashed_messages(
-            with_categories=true
-        ) %}
+        {{ form.submit(
+            class_="btn-primary"
+        ) }}
+    </form>
 
-            {% if messages %}
-                <div aria-live="polite">
-                    {% for category, message in messages %}
-                        <div
-                            class="
-                                system-message
-                                system-message--{{ category }}
-                            "
-                        >
-                            {{ message }}
-                        </div>
-                    {% endfor %}
-                </div>
-            {% endif %}
+</section>
 
-        {% endwith %}
-
-
-        {% block breadcrumbs %}{% endblock %}
-
-        {% block page_header %}{% endblock %}
-
-        {% block content %}{% endblock %}
-
-    </main>
-
-
-    <footer class="task-access-footer">
-        Secure departmental task access
-    </footer>
-
-    {% block scripts %}{% endblock %}
-
-</body>
-
-</html>
+{% endblock %}

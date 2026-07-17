@@ -327,8 +327,8 @@ def view_task(task_id):
         task_actor = current_user.email
     else:
         task_actor = (
-            get_task_access_actor 
-            or task.assigned_to_emailss
+            get_task_access_actor(task)
+            or task.assigned_to_email
         )
     record_task_opening(task, task_actor)
     form = WorkflowChecklistForm()
@@ -616,6 +616,7 @@ def admin_approval(task_id):
 
             return render_admin_approval(
                 task=task,
+                form=form,
                 prior_tasks=prior_tasks,
                 completion_issues=completion_issues,
                 case_is_closed=case_is_closed
@@ -624,7 +625,7 @@ def admin_approval(task_id):
         try:
             approve_and_close_case(
                 final_task=task,
-                approved_by=task.assigned_to_email,
+                approved_by=current_user.email,
                 remarks=form.remarks.data or "",
             )
 
