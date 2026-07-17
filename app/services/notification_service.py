@@ -1,5 +1,5 @@
 from html import escape
-from urllib.parse import urljoin
+from urllib.parse import urlencode, urljoin
 
 from flask import current_app
 
@@ -14,27 +14,193 @@ from app.services.email_service import (
     EmailResult,
     get_email_service,
 )
+from app.services.task_access_service import (
+    issue_task_access_grant,
+    revoke_grant,
+)
 
 
-def build_task_url(task: WorkflowTask) -> str:
-    base_url = current_app.config["APP_BASE_URL"].rstrip("/") + "/"
-    relative_path = f"workflow/tasks/{task.id}"
+# ============================================================
+# URL construction
+# ============================================================
 
-    return urljoin(base_url, relative_path)
+def build_absolute_url(
+    relative_path: str,
+) -> str:
+    """
+    Convert an application-relative path into a complete URL.
 
+    APP_BASE_URL must contain the externally reachable application
+    address in production.
+    """
+
+    base_url = (
+        current_app.config[
+            "APP_BASE_URL"
+        ].rstrip("/")
+        + "/"
+    )
+
+    return urljoin(
+        base_url,
+        str(relative_path).lstrip("/"),
+    )
+
+
+def build_portal_task_url(
+    task: WorkflowTask,
+) -> str:
+    """
+    Build a task URL that requires authenticated portal access.
+
+    NOC checklist tasks use the departmental task route.
+    Final Admin tasks use the dedicated approval route.
+    """
+
+    if task.phase.is_final_approval:
+        relative_path = (
+            f"workflow/tasks/"
+            f"{task.id}/approval"
+        )
+    else:
+        relative_path = (
+            f"workflow/tasks/{task.id}"
+        )
+
+    return build_absolute_url(
+        relative_path
+    )
+
+
+def build_task_access_url(
+    raw_token: str,
+) -> str:
+    """
+    Build the secure bearer-token URL sent to MIS and Hardware.
+    """
+
+    return build_absolute_url(
+        f"task-access/{raw_token}"
+    )
+
+
+def build_case_register_url(
+    task: WorkflowTask,
+) -> str:
+    """
+    Build an authenticated Cases-register URL for NOC monitoring.
+
+    This is used for overdue escalations. It does not provide NOC
+    with a departmental task-access token.
+    """
+
+    query_string = urlencode(
+        {
+            "status": "all",
+            "q": task.case.case_number,
+        }
+    )
+
+    return build_absolute_url(
+        f"cases/?{query_string}"
+    )
+
+
+# ============================================================
+# Shared helpers
+# ============================================================
+
+def task_requires_portal_login(
+    task: WorkflowTask,
+) -> bool:
+    """
+    Return whether the assignment must use portal authentication.
+
+    NOC users and final approvers use authenticated portal access.
+    Other departmental users receive task-specific access grants.
+    """
+
+    department_name = str(
+        task.phase.department.name or ""
+    ).strip().upper()
+
+    return bool(
+        task.phase.is_final_approval
+        or department_name == "NOC"
+    )
+
+
+def format_datetime(
+    value,
+) -> str:
+    """
+    Format an application datetime for notification messages.
+    """
+
+    if value is None:
+        return "Not recorded"
+
+    return value.strftime(
+        "%d %B %Y, %I:%M %p"
+    )
+
+
+def send_notification_email(
+    *,
+    notification: EmailNotification,
+    html_body: str,
+    text_body: str,
+) -> EmailResult:
+    """
+    Send one notification through the configured email backend.
+
+    Backend exceptions are converted into an EmailResult so the
+    notification record can still be marked as failed.
+    """
+
+    try:
+        email_service = get_email_service()
+
+        return email_service.send_email(
+            recipients=[
+                notification.recipient_email
+            ],
+            subject=notification.subject,
+            html_body=html_body,
+            text_body=text_body,
+        )
+
+    except Exception as exc:
+        current_app.logger.exception(
+            (
+                "Unexpected error while sending email "
+                "notification %s."
+            ),
+            notification.id,
+        )
+
+        return EmailResult(
+            success=False,
+            error_message=str(exc),
+        )
+
+
+# ============================================================
+# Assignment notifications
+# ============================================================
 
 def create_task_assignment_notification(
     task: WorkflowTask,
 ) -> EmailNotification:
     """
-    Create a pending notification record.
+    Create a pending task-assignment notification.
 
-    The notification is added to the current database session,
-    but this function does not commit.
+    This function adds records to the active SQLAlchemy session but
+    does not commit. The calling workflow controls the transaction.
     """
 
     subject = (
-        f"Offboarding Action Required — "
+        "Offboarding Action Required — "
         f"{task.case.case_number}"
     )
 
@@ -42,24 +208,28 @@ def create_task_assignment_notification(
         case=task.case,
         workflow_task=task,
         notification_type="TASK_ASSIGNED",
-        recipient_email=task.assigned_to_email,
+        recipient_email=(
+            task.assigned_to_email
+        ),
         subject=subject,
         status="PENDING",
     )
 
     db.session.add(notification)
 
-    audit_log = AuditLog(
-        case=task.case,
-        action="TASK_NOTIFICATION_QUEUED",
-        performed_by="System",
-        details=(
-            f"Task notification queued for "
-            f"'{task.assigned_to_email}'."
-        ),
+    db.session.add(
+        AuditLog(
+            case=task.case,
+            action=(
+                "TASK_NOTIFICATION_QUEUED"
+            ),
+            performed_by="System",
+            details=(
+                "Task notification queued for "
+                f"'{task.assigned_to_email}'."
+            ),
+        )
     )
-
-    db.session.add(audit_log)
 
     return notification
 
@@ -68,107 +238,229 @@ def deliver_task_assignment_notification(
     notification: EmailNotification,
 ) -> EmailResult:
     """
-    Attempt delivery and update the notification record.
+    Attempt delivery of a task-assignment notification.
 
-    This function changes the SQLAlchemy session but does not commit.
+    NOC and final Admin tasks receive portal-authenticated links.
+    MIS and Hardware tasks receive secure task-specific access links.
+
+    This function updates the current SQLAlchemy session but does not
+    commit. The calling workflow remains responsible for committing.
     """
 
     task = notification.workflow_task
-    task_url = build_task_url(task)
+    access_grant = None
 
-    due_at_text = task.due_at.strftime(
-        "%d %B %Y, %I:%M %p"
-    )
+    notification.attempted_at = utc_now()
+    notification.provider_message_id = None
+    notification.error_message = None
+    notification.sent_at = None
 
-    text_body = f"""
+    try:
+        requires_portal_login = (
+            task_requires_portal_login(
+                task
+            )
+        )
+
+        if requires_portal_login:
+            task_url = (
+                build_portal_task_url(
+                    task
+                )
+            )
+
+            security_notice = (
+                "Sign in through the authorised "
+                "offboarding operations portal to "
+                "open this assignment."
+            )
+
+        else:
+            (
+                access_grant,
+                raw_token,
+            ) = issue_task_access_grant(
+                task=task,
+                recipient_email=(
+                    notification.recipient_email
+                ),
+            )
+
+            task_url = (
+                build_task_access_url(
+                    raw_token
+                )
+            )
+
+            security_notice = (
+                "This secure link is intended only "
+                "for the assigned department. "
+                "Do not forward it."
+            )
+
+        due_at_text = format_datetime(
+            task.due_at
+        )
+
+        text_body = f"""
 A new employee offboarding task has been assigned.
 
 Case Number: {task.case.case_number}
 Employee: {task.case.employee_name}
+Employee ID: {task.case.employee_id}
 Phase: {task.phase.name}
 Assigned Department: {task.phase.department.name}
 Due At: {due_at_text}
 
 Open the assigned task:
 {task_url}
+
+Security notice:
+{security_notice}
 """.strip()
 
-    html_body = f"""
-    <h2>Offboarding Action Required</h2>
+        html_body = f"""
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>
+        {escape(notification.subject)}
+    </title>
+</head>
+
+<body>
+    <h1>Offboarding Action Required</h1>
 
     <p>
-        A new employee offboarding task has been assigned
-        to your department.
+        A new employee offboarding task has been assigned.
     </p>
 
-    <ul>
-        <li>
-            <strong>Case Number:</strong>
-            {escape(task.case.case_number)}
-        </li>
-        <li>
-            <strong>Employee:</strong>
-            {escape(task.case.employee_name)}
-        </li>
-        <li>
-            <strong>Phase:</strong>
-            {escape(task.phase.name)}
-        </li>
-        <li>
-            <strong>Assigned Department:</strong>
-            {escape(task.phase.department.name)}
-        </li>
-        <li>
-            <strong>Due At:</strong>
-            {escape(due_at_text)}
-        </li>
-    </ul>
+    <table
+        role="presentation"
+        cellpadding="6"
+        cellspacing="0"
+        border="0"
+    >
+        <tr>
+            <th align="left">Case Number</th>
+            <td>
+                {escape(task.case.case_number)}
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">Employee</th>
+            <td>
+                {escape(task.case.employee_name)}
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">Employee ID</th>
+            <td>
+                {escape(task.case.employee_id)}
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">Phase</th>
+            <td>
+                {escape(task.phase.name)}
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">
+                Assigned Department
+            </th>
+            <td>
+                {
+                    escape(
+                        task.phase.department.name
+                    )
+                }
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">Due At</th>
+            <td>
+                {escape(due_at_text)}
+            </td>
+        </tr>
+    </table>
+
+    <p>
+        <strong>Security notice:</strong>
+        {escape(security_notice)}
+    </p>
 
     <p>
         <a href="{escape(task_url)}">
             Open Assigned Task
         </a>
     </p>
-    """.strip()
+</body>
+</html>
+""".strip()
 
-    notification.attempted_at = utc_now()
-
-    try:
-        email_service = get_email_service()
-
-        result = email_service.send_email(
-            recipients=[notification.recipient_email],
-            subject=notification.subject,
+        result = send_notification_email(
+            notification=notification,
             html_body=html_body,
             text_body=text_body,
         )
 
     except Exception as exc:
+        current_app.logger.exception(
+            (
+                "Could not prepare task assignment "
+                "notification %s."
+            ),
+            notification.id,
+        )
+
         result = EmailResult(
             success=False,
             error_message=str(exc),
         )
 
-    notification.provider_message_id = result.provider_message_id
-    notification.error_message = result.error_message
+    notification.provider_message_id = (
+        result.provider_message_id
+    )
+
+    notification.error_message = (
+        result.error_message
+    )
 
     if result.success:
         notification.status = "SENT"
         notification.sent_at = utc_now()
+        notification.error_message = None
 
         action = "TASK_NOTIFICATION_SENT"
+
         details = (
-            f"Task notification sent to "
+            "Task notification sent to "
             f"'{notification.recipient_email}'."
         )
+
     else:
         notification.status = "FAILED"
+        notification.sent_at = None
+
+        if access_grant is not None:
+            revoke_grant(
+                access_grant
+            )
 
         action = "TASK_NOTIFICATION_FAILED"
+
         details = (
-            f"Task notification failed for "
+            "Task notification failed for "
             f"'{notification.recipient_email}'. "
-            f"Reason: {result.error_message}"
+            "Reason: "
+            f"{result.error_message or 'No reason returned.'}"
         )
 
     db.session.add(
@@ -181,6 +473,12 @@ Open the assigned task:
     )
 
     return result
+
+
+# ============================================================
+# Overdue escalation notifications
+# ============================================================
+
 def create_overdue_task_notification(
     *,
     task: WorkflowTask,
@@ -189,14 +487,14 @@ def create_overdue_task_notification(
     deduplication_key: str,
 ) -> EmailNotification:
     """
-    Create a persistent overdue-notification record.
+    Create a persistent overdue escalation notification.
 
-    This function adds records to the current SQLAlchemy session
-    but does not commit.
+    This function adds records to the active SQLAlchemy session but
+    does not commit.
     """
 
     subject = (
-        f"Overdue Offboarding Task — "
+        "Overdue Offboarding Task — "
         f"{task.case.case_number} — "
         f"{task.phase.name}"
     )
@@ -204,9 +502,15 @@ def create_overdue_task_notification(
     notification = EmailNotification(
         case=task.case,
         workflow_task=task,
-        notification_type=notification_type,
-        deduplication_key=deduplication_key,
-        recipient_email=recipient_email,
+        notification_type=(
+            notification_type
+        ),
+        deduplication_key=(
+            deduplication_key
+        ),
+        recipient_email=(
+            recipient_email
+        ),
         subject=subject,
         status="PENDING",
     )
@@ -216,13 +520,17 @@ def create_overdue_task_notification(
     db.session.add(
         AuditLog(
             case=task.case,
-            action="OVERDUE_NOTIFICATION_QUEUED",
+            action=(
+                "OVERDUE_NOTIFICATION_QUEUED"
+            ),
             performed_by="System",
             details=(
-                f"An overdue escalation notification was queued "
-                f"for workflow task {task.id}. "
-                f"Notification type: {notification_type}. "
-                f"Recipient: '{recipient_email}'."
+                "An overdue escalation notification "
+                f"was queued for workflow task {task.id}. "
+                "Notification type: "
+                f"{notification_type}. "
+                "Recipient: "
+                f"'{recipient_email}'."
             ),
         )
     )
@@ -234,29 +542,44 @@ def deliver_overdue_task_notification(
     notification: EmailNotification,
 ) -> EmailResult:
     """
-    Attempt delivery of an overdue-task escalation notification.
+    Attempt delivery of an overdue-task escalation.
 
-    The notification record and audit log are updated, but this
-    function does not commit.
+    Overdue escalation recipients are directed to the authenticated
+    Cases register. They are not issued departmental task tokens.
+
+    This function updates the current SQLAlchemy session but does not
+    commit.
     """
 
     task = notification.workflow_task
-    task_url = build_task_url(task)
 
-    due_at_text = task.due_at.strftime(
-        "%d %B %Y, %I:%M %p"
+    notification.attempted_at = utc_now()
+    notification.provider_message_id = None
+    notification.error_message = None
+    notification.sent_at = None
+
+    case_register_url = (
+        build_case_register_url(
+            task
+        )
     )
 
-    assigned_at_text = task.assigned_at.strftime(
-        "%d %B %Y, %I:%M %p"
+    due_at_text = format_datetime(
+        task.due_at
+    )
+
+    assigned_at_text = format_datetime(
+        task.assigned_at
     )
 
     if task.opened_at is None:
-        opened_status_text = "The task has not been opened."
+        opened_status_text = (
+            "The task has not been opened."
+        )
     else:
         opened_status_text = (
             "The task was opened on "
-            f"{task.opened_at.strftime('%d %B %Y, %I:%M %p')}, "
+            f"{format_datetime(task.opened_at)}, "
             "but it has not been submitted."
         )
 
@@ -265,6 +588,7 @@ An employee offboarding task is overdue.
 
 Case Number: {task.case.case_number}
 Employee: {task.case.employee_name}
+Employee ID: {task.case.employee_id}
 Phase: {task.phase.name}
 Responsible Department: {task.phase.department.name}
 Assigned Email: {task.assigned_to_email}
@@ -273,111 +597,164 @@ Assigned At: {assigned_at_text}
 Due At: {due_at_text}
 Open Status: {opened_status_text}
 
-Open the task:
-{task_url}
+Review the case in the authenticated portal:
+{case_register_url}
 """.strip()
 
     html_body = f"""
-    <h2>Overdue Offboarding Task</h2>
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>
+        {escape(notification.subject)}
+    </title>
+</head>
+
+<body>
+    <h1>Overdue Offboarding Task</h1>
 
     <p>
-        An employee offboarding task has passed its due date
-        and requires NOC attention.
+        An employee offboarding task has passed its due
+        date and requires NOC attention.
     </p>
 
-    <ul>
-        <li>
-            <strong>Case Number:</strong>
-            {escape(task.case.case_number)}
-        </li>
-        <li>
-            <strong>Employee:</strong>
-            {escape(task.case.employee_name)}
-        </li>
-        <li>
-            <strong>Phase:</strong>
-            {escape(task.phase.name)}
-        </li>
-        <li>
-            <strong>Responsible Department:</strong>
-            {escape(task.phase.department.name)}
-        </li>
-        <li>
-            <strong>Assigned Email:</strong>
-            {escape(task.assigned_to_email)}
-        </li>
-        <li>
-            <strong>Task Status:</strong>
-            {escape(task.status)}
-        </li>
-        <li>
-            <strong>Assigned At:</strong>
-            {escape(assigned_at_text)}
-        </li>
-        <li>
-            <strong>Due At:</strong>
-            {escape(due_at_text)}
-        </li>
-        <li>
-            <strong>Open Status:</strong>
-            {escape(opened_status_text)}
-        </li>
-    </ul>
+    <table
+        role="presentation"
+        cellpadding="6"
+        cellspacing="0"
+        border="0"
+    >
+        <tr>
+            <th align="left">Case Number</th>
+            <td>
+                {escape(task.case.case_number)}
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">Employee</th>
+            <td>
+                {escape(task.case.employee_name)}
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">Employee ID</th>
+            <td>
+                {escape(task.case.employee_id)}
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">Phase</th>
+            <td>
+                {escape(task.phase.name)}
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">
+                Responsible Department
+            </th>
+            <td>
+                {
+                    escape(
+                        task.phase.department.name
+                    )
+                }
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">
+                Assigned Email
+            </th>
+            <td>
+                {escape(task.assigned_to_email)}
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">Task Status</th>
+            <td>
+                {escape(task.status)}
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">Assigned At</th>
+            <td>
+                {escape(assigned_at_text)}
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">Due At</th>
+            <td>
+                {escape(due_at_text)}
+            </td>
+        </tr>
+
+        <tr>
+            <th align="left">Open Status</th>
+            <td>
+                {escape(opened_status_text)}
+            </td>
+        </tr>
+    </table>
 
     <p>
-        <a href="{escape(task_url)}">
-            Open Overdue Task
+        <a href="{escape(case_register_url)}">
+            Review Case in Portal
         </a>
     </p>
-    """.strip()
+</body>
+</html>
+""".strip()
 
-    notification.attempted_at = utc_now()
-    notification.provider_message_id = None
-    notification.error_message = None
-    notification.sent_at = None
-
-    try:
-        email_service = get_email_service()
-
-        result = email_service.send_email(
-            recipients=[notification.recipient_email],
-            subject=notification.subject,
-            html_body=html_body,
-            text_body=text_body,
-        )
-
-    except Exception as exc:
-        result = EmailResult(
-            success=False,
-            error_message=str(exc),
-        )
+    result = send_notification_email(
+        notification=notification,
+        html_body=html_body,
+        text_body=text_body,
+    )
 
     notification.provider_message_id = (
         result.provider_message_id
     )
 
-    notification.error_message = result.error_message
+    notification.error_message = (
+        result.error_message
+    )
 
     if result.success:
         notification.status = "SENT"
         notification.sent_at = utc_now()
+        notification.error_message = None
 
-        action = "OVERDUE_NOTIFICATION_SENT"
+        action = (
+            "OVERDUE_NOTIFICATION_SENT"
+        )
 
         details = (
-            f"Overdue escalation for workflow task {task.id} "
-            f"was sent to '{notification.recipient_email}'."
+            "Overdue escalation for workflow task "
+            f"{task.id} was sent to "
+            f"'{notification.recipient_email}'."
         )
 
     else:
         notification.status = "FAILED"
+        notification.sent_at = None
 
-        action = "OVERDUE_NOTIFICATION_FAILED"
+        action = (
+            "OVERDUE_NOTIFICATION_FAILED"
+        )
 
         details = (
-            f"Overdue escalation for workflow task {task.id} "
-            f"failed for '{notification.recipient_email}'. "
-            f"Reason: "
+            "Overdue escalation for workflow task "
+            f"{task.id} failed for "
+            f"'{notification.recipient_email}'. "
+            "Reason: "
             f"{result.error_message or 'No reason returned.'}"
         )
 

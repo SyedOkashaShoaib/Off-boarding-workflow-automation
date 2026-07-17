@@ -268,7 +268,63 @@ textarea {
     gap: 10px;
 }
 
+.portal-user {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 1.2;
+}
 
+
+.portal-user__name {
+    max-width: 220px;
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+
+.portal-user__role {
+    margin-top: 2px;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 10px;
+}
+
+
+.portal-logout-form {
+    width: auto;
+    max-width: none;
+    margin: 0;
+}
+
+
+.header-action-button {
+    min-height: 28px;
+    padding: 4px 10px;
+    color: #183f5b;
+    background:
+        linear-gradient(
+            to bottom,
+            #ffffff,
+            #d4e4ef
+        );
+    border: 1px solid #315f7e;
+    text-shadow: none;
+}
+
+
+.header-action-button:hover {
+    color: #123952;
+    background:
+        linear-gradient(
+            to bottom,
+            #ffffff,
+            #c6dfef
+        );
+}
 .environment-indicator {
     display: inline-flex;
     align-items: center;
@@ -1161,7 +1217,9 @@ tbody tr:hover {
         align-items: flex-start;
         padding: 10px 12px;
     }
-
+    .portal-user {
+        display : None
+    }
 
     .application-header__name {
         white-space: normal;

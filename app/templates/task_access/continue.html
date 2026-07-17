@@ -1,0 +1,87 @@
+{% extends "layouts/task_base.html" %}
+
+
+{% block title %}
+    Open Assigned Task
+{% endblock %}
+
+
+{% block content %}
+
+<section class="task-access-card">
+
+    <h1>Departmental Clearance Assignment</h1>
+
+    <p>
+        Confirm that you want to open the assigned
+        employee offboarding task.
+    </p>
+
+
+    <dl class="task-access-summary">
+
+        <div>
+            <dt>Case Number</dt>
+            <dd>{{ task.case.case_number }}</dd>
+        </div>
+
+        <div>
+            <dt>Employee</dt>
+            <dd>{{ task.case.employee_name }}</dd>
+        </div>
+
+        <div>
+            <dt>Responsible Department</dt>
+            <dd>{{ task.phase.department.name }}</dd>
+        </div>
+
+        <div>
+            <dt>Assigned Task</dt>
+            <dd>{{ task.phase.name }}</dd>
+        </div>
+
+        <div>
+            <dt>Due Date</dt>
+            <dd>
+                {% if task.due_at %}
+                    {{ task.due_at.strftime(
+                        "%d %B %Y, %I:%M %p"
+                    ) }}
+                {% else %}
+                    Not recorded
+                {% endif %}
+            </dd>
+        </div>
+
+    </dl>
+
+
+    <div class="task-access-warning">
+
+        <strong>Secure assignment link</strong>
+
+        <p>
+            This link provides access only to this task.
+            Do not forward or share it.
+        </p>
+
+    </div>
+
+
+    <form
+        method="post"
+        action="{{ url_for(
+            'task_access.continue_to_task'
+        ) }}"
+        class="task-access-form"
+    >
+        {{ form.hidden_tag() }}
+
+        {{ form.submit(
+            class_="btn-primary"
+        ) }}
+    </form>
+
+</section>
+
+{% endblock %}

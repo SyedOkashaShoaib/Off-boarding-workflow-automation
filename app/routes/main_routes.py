@@ -1,9 +1,28 @@
-from flask import Blueprint
-from flask import render_template, redirect, url_for
+from flask import (
+    Blueprint,
+    redirect,
+    url_for,
+)
+from flask_login import current_user
 
 
-main_bp = Blueprint('main', __name__)
+main_bp = Blueprint(
+    "main",
+    __name__,
+)
 
-@main_bp.route('/')
+
+@main_bp.get("/")
 def home():
-    return redirect (url_for('cases.create_case'))
+    """
+    Send users to the appropriate application entry point.
+    """
+
+    if current_user.is_authenticated:
+        return redirect(
+            url_for("cases.list_cases")
+        )
+
+    return redirect(
+        url_for("auth.login")
+    )
