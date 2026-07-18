@@ -1,0 +1,466 @@
+import hashlib
+import secrets
+
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Tuple
+
+from flask import current_app, request, session
+
+from app.extension import db
+from app.models import (
+    AuditLog,
+    TaskAccessGrant,
+    WorkflowTask,
+    utc_now,
+)
+
+
+RAW_TOKEN_BYTES = 32
+
+PENDING_GRANT_SESSION_KEY = (
+    "pending_task_access_grant_id"
+)
+
+ACTIVE_GRANT_SESSION_KEY = (
+    "active_task_access_grant_id"
+)
+
+ACTIVE_TASK_SESSION_KEY = (
+    "active_task_access_task_id"
+)
+
+OPEN_TASK_STATUSES = {
+    "PENDING",
+    "IN_PROGRESS",
+}
+
+
+def normalize_datetime(
+    value: Optional[datetime],
+) -> Optional[datetime]:
+    """
+    Normalize a database datetime into timezone-aware UTC.
+    """
+
+    if value is None:
+        return None
+
+    if value.tzinfo is None:
+        return value.replace(
+            tzinfo=timezone.utc
+        )
+
+    return value.astimezone(
+        timezone.utc
+    )
+
+
+def hash_task_access_token(
+    raw_token: str,
+) -> str:
+    """
+    Return the SHA-256 digest stored in the database.
+    """
+
+    return hashlib.sha256(
+        raw_token.encode("utf-8")
+    ).hexdigest()
+
+
+def revoke_grant(
+    grant: TaskAccessGrant,
+    *,
+    revoked_at: Optional[datetime] = None,
+) -> None:
+    """
+    Revoke one task-access grant.
+    """
+
+    if grant.revoked_at is None:
+        grant.revoked_at = (
+            revoked_at or utc_now()
+        )
+
+
+def revoke_active_task_grants(
+    task: WorkflowTask,
+) -> None:
+    """
+    Revoke unconsumed grants previously issued for a task.
+
+    A newly generated assignment link replaces older links.
+    """
+
+    current_time = utc_now()
+
+    active_grants = (
+        TaskAccessGrant.query
+        .filter(
+            TaskAccessGrant.workflow_task_id
+            == task.id,
+            TaskAccessGrant.revoked_at.is_(None),
+            TaskAccessGrant.consumed_at.is_(None),
+        )
+        .all()
+    )
+
+    for grant in active_grants:
+        grant.revoked_at = current_time
+
+
+def issue_task_access_grant(
+    *,
+    task: WorkflowTask,
+    recipient_email: str,
+) -> Tuple[TaskAccessGrant, str]:
+    """
+    Generate and persist a new access grant.
+
+    The caller receives the raw token once so it can be inserted into
+    the assignment email. The raw token is not stored.
+    """
+
+    if task.phase.is_final_approval:
+        raise ValueError(
+            "Final approval tasks require portal authentication."
+        )
+
+    cleaned_email = str(
+        recipient_email or ""
+    ).strip().lower()
+
+    if not cleaned_email:
+        raise ValueError(
+            "A recipient email address is required."
+        )
+
+    revoke_active_task_grants(task)
+
+    raw_token = secrets.token_urlsafe(
+        RAW_TOKEN_BYTES
+    )
+
+    current_time = utc_now()
+
+    token_lifetime_hours = current_app.config[
+        "TASK_ACCESS_TOKEN_LIFETIME_HOURS"
+    ]
+
+    grant = TaskAccessGrant(
+        workflow_task=task,
+        token_hash=hash_task_access_token(
+            raw_token
+        ),
+        recipient_email=cleaned_email,
+        expires_at=(
+            current_time
+            + timedelta(
+                hours=token_lifetime_hours
+            )
+        ),
+        created_at=current_time,
+    )
+
+    db.session.add(grant)
+
+    db.session.add(
+        AuditLog(
+            case=task.case,
+            action="TASK_ACCESS_GRANTED",
+            performed_by="System",
+            details=(
+                "A secure departmental task-access grant "
+                f"was issued for task {task.id} to "
+                f"'{cleaned_email}'."
+            ),
+        )
+    )
+
+    return grant, raw_token
+
+
+def grant_is_redeemable(
+    grant: Optional[TaskAccessGrant],
+) -> bool:
+    """
+    Return whether a token can establish a new task session.
+    """
+
+    if grant is None:
+        return False
+
+    if grant.revoked_at is not None:
+        return False
+
+    if grant.consumed_at is not None:
+        return False
+
+    expires_at = normalize_datetime(
+        grant.expires_at
+    )
+
+    if (
+        expires_at is None
+        or expires_at <= utc_now()
+    ):
+        return False
+
+    task = grant.workflow_task
+
+    if task is None:
+        return False
+
+    if task.phase.is_final_approval:
+        return False
+
+    if task.status not in OPEN_TASK_STATUSES:
+        return False
+
+    return True
+
+
+def find_redeemable_grant(
+    raw_token: str,
+) -> Optional[TaskAccessGrant]:
+    """
+    Resolve a raw email token into an active access grant.
+    """
+
+    cleaned_token = str(
+        raw_token or ""
+    ).strip()
+
+    if (
+        not cleaned_token
+        or len(cleaned_token) > 512
+    ):
+        return None
+
+    token_hash = hash_task_access_token(
+        cleaned_token
+    )
+
+    grant = (
+        TaskAccessGrant.query
+        .filter_by(
+            token_hash=token_hash
+        )
+        .first()
+    )
+
+    if not grant_is_redeemable(grant):
+        return None
+
+    return grant
+
+
+def set_pending_task_access(
+    grant: TaskAccessGrant,
+) -> None:
+    """
+    Store a validated grant temporarily before user confirmation.
+    """
+
+    session[
+        PENDING_GRANT_SESSION_KEY
+    ] = grant.id
+
+
+def activate_pending_task_access(
+) -> Optional[TaskAccessGrant]:
+    """
+    Convert a pending grant into an active limited task session.
+    """
+
+    grant_id = session.get(
+        PENDING_GRANT_SESSION_KEY
+    )
+
+    if grant_id is None:
+        return None
+
+    grant = db.session.get(
+        TaskAccessGrant,
+        grant_id,
+    )
+
+    if not grant_is_redeemable(grant):
+        session.pop(
+            PENDING_GRANT_SESSION_KEY,
+            None,
+        )
+        return None
+
+    session[
+        ACTIVE_GRANT_SESSION_KEY
+    ] = grant.id
+
+    session[
+        ACTIVE_TASK_SESSION_KEY
+    ] = grant.workflow_task_id
+
+    session.pop(
+        PENDING_GRANT_SESSION_KEY,
+        None,
+    )
+
+    grant.last_accessed_at = utc_now()
+    grant.access_count = (
+        int(grant.access_count or 0) + 1
+    )
+
+    db.session.add(
+        AuditLog(
+            case=grant.workflow_task.case,
+            action="TASK_ACCESS_ACTIVATED",
+            performed_by=grant.recipient_email,
+            details=(
+                "A secure departmental task-access session "
+                f"was activated for task "
+                f"{grant.workflow_task_id}."
+            ),
+        )
+    )
+
+    return grant
+
+
+def get_session_grant_for_task(
+    task: WorkflowTask,
+    *,
+    allow_consumed_read_only: bool = False,
+) -> Optional[TaskAccessGrant]:
+    """
+    Return the grant authorising the current browser session.
+
+    A consumed grant may continue displaying the submitted read-only
+    page in the same browser session, but may not submit another POST.
+    """
+
+    grant_id = session.get(
+        ACTIVE_GRANT_SESSION_KEY
+    )
+
+    task_id = session.get(
+        ACTIVE_TASK_SESSION_KEY
+    )
+
+    if (
+        grant_id is None
+        or task_id != task.id
+    ):
+        return None
+
+    grant = db.session.get(
+        TaskAccessGrant,
+        grant_id,
+    )
+
+    if grant is None:
+        return None
+
+    if grant.workflow_task_id != task.id:
+        return None
+
+    if grant.revoked_at is not None:
+        return None
+
+    expires_at = normalize_datetime(
+        grant.expires_at
+    )
+
+    if (
+        expires_at is None
+        or expires_at <= utc_now()
+    ):
+        return None
+
+    if grant.consumed_at is not None:
+        if (
+            allow_consumed_read_only
+            and request.method == "GET"
+        ):
+            return grant
+
+        return None
+
+    if task.status not in OPEN_TASK_STATUSES:
+        return None
+
+    return grant
+
+
+def consume_task_access_grants(
+    task: WorkflowTask,
+) -> None:
+    """
+    Prevent issued links from establishing new sessions after submit.
+    """
+
+    current_time = utc_now()
+
+    active_grants = (
+        TaskAccessGrant.query
+        .filter(
+            TaskAccessGrant.workflow_task_id
+            == task.id,
+            TaskAccessGrant.revoked_at.is_(None),
+            TaskAccessGrant.consumed_at.is_(None),
+        )
+        .all()
+    )
+
+    for grant in active_grants:
+        grant.consumed_at = current_time
+
+    if active_grants:
+        db.session.add(
+            AuditLog(
+                case=task.case,
+                action="TASK_ACCESS_CONSUMED",
+                performed_by="System",
+                details=(
+                    "Task-access grants were consumed after "
+                    f"workflow task {task.id} was submitted."
+                ),
+            )
+        )
+
+
+def get_task_access_actor(
+    task: WorkflowTask,
+) -> Optional[str]:
+    """
+    Return the recipient represented by the active task session.
+    """
+
+    grant = get_session_grant_for_task(
+        task,
+        allow_consumed_read_only=True,
+    )
+
+    if grant is None:
+        return None
+
+    return grant.recipient_email
+
+
+def clear_task_access_session() -> None:
+    """
+    Remove task-specific access information from the session.
+    """
+
+    session.pop(
+        PENDING_GRANT_SESSION_KEY,
+        None,
+    )
+
+    session.pop(
+        ACTIVE_GRANT_SESSION_KEY,
+        None,
+    )
+
+    session.pop(
+        ACTIVE_TASK_SESSION_KEY,
+        None,
+    )

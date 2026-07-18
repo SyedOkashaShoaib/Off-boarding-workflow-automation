@@ -1,0 +1,705 @@
+from flask import (
+    Blueprint,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
+from flask import abort
+from flask_login import current_user
+from flask_login import login_required
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.extension import db
+from app.forms.workflow_forms import (
+    WorkflowChecklistForm,
+    AdminApprovalForm,
+    )
+from app.models import (
+    AuditLog,
+    WorkflowTask,
+    utc_now,
+    ROLE_NOC_OPERATOR,
+    ROLE_SYSTEM_ADMIN,
+)
+from app.services.checklist_service import (
+    ChecklistSubmissionError,
+    persist_checklist_submission,
+    validate_checklist_submission,
+)
+from app.services.notification_service import (
+    create_task_assignment_notification,
+    deliver_task_assignment_notification,
+)
+from app.services.workflow_service import (
+    WorkflowConfigurationError,
+    WorkflowTransitionError,
+    create_next_workflow_task,
+)
+from app.services.approval_service import (
+    FinalApprovalError,
+    approve_and_close_case,
+    get_prior_phase_completion_issues,
+)
+from app.services.task_access_service import (
+    consume_task_access_grants,
+    get_session_grant_for_task,
+    get_task_access_actor,
+)
+workflow_bp = Blueprint(
+    "workflow",
+    __name__,
+    url_prefix="/workflow",
+)
+
+@workflow_bp.after_request
+def secure_workflow_response(response):
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["Referrer-Policy"] = "no-referrer"
+
+    return response
+
+def build_checklist_sections(
+    task: WorkflowTask,
+) -> dict[str, list]:
+    """Group active checklist items by database section."""
+
+    checklist_sections: dict[str, list] = {}
+
+    for checklist_item in task.phase.checklist_items:
+        if not checklist_item.is_active:
+            continue
+
+        section_name = (
+            checklist_item.section or "Checklist"
+        )
+
+        checklist_sections.setdefault(
+            section_name,
+            [],
+        ).append(checklist_item)
+
+    return checklist_sections
+
+
+def build_saved_response_values(
+    task: WorkflowTask,
+) -> dict[int, dict[str, str]]:
+    """
+    Convert saved ChecklistResponse records into values that can
+    be displayed by the task template.
+    """
+
+    return {
+        response.checklist_item_id: {
+            "response_status": response.response_status,
+            "reason": (
+                response.not_applicable_reason or ""
+            ),
+        }
+        for response in task.responses
+    }
+COMPLETED_TASK_STATUSES = {
+    "SUBMITTED",
+    "APPROVED",
+}
+
+
+# def build_workflow_progress(
+#     task: WorkflowTask,
+# ) -> list[dict]:
+#     """
+#     Build presentation data for the workflow progress indicator.
+
+#     This keeps workflow-state calculations out of the Jinja
+#     template while leaving the underlying workflow unchanged.
+#     """
+
+#     active_phases = (
+#         WorkflowPhase.query
+#         .filter_by(is_active=True)
+#         .order_by(
+#             WorkflowPhase.phase_order.asc(),
+#             WorkflowPhase.id.asc(),
+#         )
+#         .all()
+#     )
+
+#     tasks_by_phase_id = {
+#         case_task.phase_id: case_task
+#         for case_task in task.case.tasks
+#     }
+
+#     progress_items = []
+
+#     for phase in active_phases:
+#         phase_task = tasks_by_phase_id.get(phase.id)
+
+#         if (
+#             phase_task is not None
+#             and phase_task.status in COMPLETED_TASK_STATUSES
+#         ):
+#             state = "completed"
+
+#         elif task.case.current_phase_id == phase.id:
+#             state = "current"
+
+#         else:
+#             state = "upcoming"
+
+#         progress_items.append(
+#             {
+#                 "phase": phase,
+#                 "task": phase_task,
+#                 "state": state,
+#             }
+#         )
+
+#     return progress_items
+
+def render_admin_approval(
+        *,
+        task: WorkflowTask,
+        form: AdminApprovalForm,
+        prior_tasks: list,
+        completion_issues: list,
+        case_is_closed:bool,
+):
+    return render_template(
+        'workflow/admin_approval.html',
+        task = task,
+        form = form,
+        prior_tasks=prior_tasks,
+        completion_issues=completion_issues,
+        case_is_closed=case_is_closed
+
+    )
+def render_task_detail(
+    *,
+    task: WorkflowTask,
+    form: WorkflowChecklistForm,
+    checklist_sections: dict,
+    submitted_values: dict,
+    validation_errors: dict,
+):
+    """
+    Render the departmental task page with a consistent context.    
+
+    All task-page responses should use this helper so presentation
+    data is not accidentally omitted from validation-error paths.
+    """
+
+    return render_template(
+        'workflow/task_detail.html',
+        task=task,
+        form=form,
+        checklist_sections=checklist_sections,
+        submitted_values=submitted_values,
+        validation_errors=validation_errors,
+        
+    )
+
+def record_task_opening(
+    task: WorkflowTask,
+    actor: str,
+) -> None:
+    """Record only the first time a workflow task is opened."""
+
+    if task.opened_at is not None:
+        return
+
+    try:
+        task.opened_at = utc_now()
+
+        if task.status == "PENDING":
+            task.status = "IN_PROGRESS"
+
+        db.session.add(
+            AuditLog(
+                case=task.case,
+                action="TASK_OPENED",
+                performed_by=actor,
+                details=(
+                    f"Workflow task {task.id} was opened. "
+                   
+                ),
+            )
+        )
+
+        db.session.commit()
+
+    except SQLAlchemyError:
+        db.session.rollback()
+
+        current_app.logger.exception(
+            "Failed to record workflow task %s as opened.",
+            task.id,
+        )
+
+        flash(
+            (
+                "The task was loaded, but the system could not "
+                "record its opened timestamp."
+            ),
+            "warning",
+        )
+
+def authorize_department_task(
+    task: WorkflowTask,
+):
+    """
+    Authorize access to a departmental checklist.
+
+    NOC tasks require a portal account. Other departments require
+    the secure task-specific session established from the email link.
+    """
+
+    department_name = (
+        task.phase.department.name
+        or ""
+    ).strip().upper()
+
+    if department_name == "NOC":
+
+        if not current_user.is_authenticated:
+            return redirect(
+                url_for(
+                    "auth.login",
+                    next=request.full_path,
+                )
+            )
+
+        if not current_user.has_role(
+            ROLE_NOC_OPERATOR,
+            ROLE_SYSTEM_ADMIN,
+        ):
+            abort(403)
+
+        return None
+
+    grant = get_session_grant_for_task(
+        task,
+        allow_consumed_read_only=(
+            request.method == "GET"
+        ),
+    )
+
+    if grant is None:
+        return (
+            render_template(
+                "task_access/unavailable.html"
+            ),
+            404,
+        )
+
+    return None
+
+@workflow_bp.route(
+    "/tasks/<int:task_id>",
+    methods=["GET", "POST"],
+)
+def view_task(task_id):
+    """
+    Display and submit a departmental workflow checklist.
+
+    On successful submission:
+    - save the current checklist;
+    - mark the current task submitted;
+    - create the next workflow task;
+    - queue the next assignment notification;
+    - attempt notification delivery.
+    """
+
+    task = WorkflowTask.query.get_or_404(task_id)
+
+    if task.phase.is_final_approval:
+        return redirect(url_for("workflow.admin_approval", task_id = task.id))
+    access_response=authorize_department_task(task)
+    if access_response is not None:
+        return access_response
+    department_name = (
+        task.phase.department.name
+        or ""
+    ).strip().upper()
+    if department_name == 'NOC':
+        task_actor = current_user.email
+    else:
+        task_actor = (
+            get_task_access_actor(task)
+            or task.assigned_to_email
+        )
+    record_task_opening(task, task_actor)
+    form = WorkflowChecklistForm()
+
+    checklist_sections = build_checklist_sections(task)
+
+    submitted_values = build_saved_response_values(
+        task
+    )
+
+    validation_errors: dict[int, str] = {}
+
+    if request.method == "POST":
+
+        if task.status == "SUBMITTED":
+            flash(
+                "This workflow task has already been submitted.",
+                "warning",
+            )
+
+            return redirect(
+                url_for(
+                    "workflow.view_task",
+                    task_id=task.id,
+                )
+            )
+
+        if task.phase.is_final_approval:
+            flash(
+                (
+                    "Final approval tasks cannot be submitted "
+                    "through the departmental checklist form."
+                ),
+                "error",
+            )
+
+            return redirect(
+                url_for(
+                    "workflow.view_task",
+                    task_id=task.id,
+                )
+            )
+
+        if not checklist_sections:
+            flash(
+                (
+                    "This task cannot be submitted because no "
+                    "active checklist items are configured."
+                ),
+                "error",
+            )
+
+            return render_task_detail(
+                task=task,
+                form=form,
+                checklist_sections=checklist_sections,
+                submitted_values=submitted_values,
+                validation_errors=validation_errors,
+            )
+
+        if not form.validate_on_submit():
+            flash(
+                (
+                    "The form could not be validated. Refresh the "
+                    "page and submit the checklist again."
+                ),
+                "error",
+            )
+
+            return render_task_detail(
+                task=task,
+                form=form,
+                checklist_sections=checklist_sections,
+                submitted_values=submitted_values,
+                validation_errors=validation_errors,
+            )
+
+        submitted_values, validation_errors = (
+            validate_checklist_submission(
+                task=task,
+                form_data=request.form,
+            )
+        )
+
+        if validation_errors:
+            flash(
+                (
+                    "The checklist contains validation errors. "
+                    "Correct the listed items and submit again."
+                ),
+                "error",
+            )
+
+            return render_task_detail(
+                
+                task=task,
+                form=form,
+                checklist_sections=checklist_sections,
+                submitted_values=submitted_values,
+                validation_errors=validation_errors,
+            )
+
+        # -----------------------------------------------------
+        # Transaction 1:
+        # Save the checklist and create the next task.
+        # -----------------------------------------------------
+        try:
+            persist_checklist_submission(
+                task=task,
+                submitted_values=submitted_values,
+                responded_by=task_actor,
+            )
+
+            next_task = create_next_workflow_task(
+                completed_task=task,
+            )
+            consume_task_access_grants(task)
+            notification = (
+                create_task_assignment_notification(
+                    next_task
+                )
+            )
+
+            db.session.commit()
+
+        except (
+            ChecklistSubmissionError,
+            WorkflowConfigurationError,
+            WorkflowTransitionError,
+        ) as exc:
+            db.session.rollback()
+
+            flash(
+                str(exc),
+                "error",
+            )
+
+            return render_task_detail(
+                task=task,
+                form=form,
+                checklist_sections=checklist_sections,
+                submitted_values=submitted_values,
+                validation_errors=validation_errors,
+            )
+
+        except SQLAlchemyError:
+            db.session.rollback()
+
+            current_app.logger.exception(
+                (
+                    "Database error while submitting task %s "
+                    "and advancing the workflow."
+                ),
+                task.id,
+            )
+
+            flash(
+                (
+                    "A database error occurred. The checklist was "
+                    "not submitted and the workflow was not advanced."
+                ),
+                "error",
+            )
+
+            return render_task_detail(
+                task=task,
+                form=form,
+                checklist_sections=checklist_sections,
+                submitted_values=submitted_values,
+                validation_errors=validation_errors,
+            )
+
+        # -----------------------------------------------------
+        # Transaction 2:
+        # Attempt delivery of the next task notification.
+        # -----------------------------------------------------
+        delivery_result = None
+
+        try:
+            delivery_result = (
+                deliver_task_assignment_notification(
+                    notification
+                )
+            )
+
+            db.session.commit()
+
+        except Exception:
+            db.session.rollback()
+
+            current_app.logger.exception(
+                (
+                    "The next workflow task was created, but its "
+                    "notification delivery result could not be saved."
+                )
+            )
+
+        # -----------------------------------------------------
+        # User feedback
+        # -----------------------------------------------------
+
+        return redirect(
+            url_for(
+                "workflow.view_task",
+                task_id=task.id,
+            )
+        )
+
+    return render_task_detail(
+        task=task,
+        form=form,
+        checklist_sections=checklist_sections,
+        submitted_values=submitted_values,
+        validation_errors=validation_errors,
+    )
+@workflow_bp.route(
+    "/tasks/<int:task_id>/approval",
+    methods=["GET", "POST"],
+)
+@login_required
+def admin_approval(task_id):
+    """
+    Display and process the final Admin approval task.
+    """
+
+    task = WorkflowTask.query.get_or_404(task_id)
+
+    if not task.phase.is_final_approval:
+        return redirect(
+            url_for(
+                "workflow.view_task",
+                task_id=task.id,
+            )
+        )
+
+    record_task_opening(task, current_user.email)
+
+    form = AdminApprovalForm()
+
+    prior_tasks = sorted(
+        [
+            case_task
+            for case_task in task.case.tasks
+            if case_task.phase.phase_order
+            < task.phase.phase_order
+        ],
+        key=lambda case_task: (
+            case_task.phase.phase_order,
+            case_task.id,
+        ),
+    )
+
+    completion_issues = get_prior_phase_completion_issues(
+        task
+    )
+
+    case_is_closed = (
+        task.case.status == "CLOSED"
+        or task.case.closed_at is not None
+        or task.status == "APPROVED"
+    )
+
+    if form.validate_on_submit():
+        if case_is_closed:
+            flash(
+                "This offboarding case has already been closed.",
+                "warning",
+            )
+
+            return redirect(
+                url_for(
+                    "workflow.admin_approval",
+                    task_id=task.id,
+                )
+            )
+
+        if completion_issues:
+            flash(
+                (
+                    "The case cannot be approved because one or "
+                    "more previous workflow phases are incomplete."
+                ),
+                "error",
+            )
+
+            return render_admin_approval(
+                task=task,
+                form=form,
+                prior_tasks=prior_tasks,
+                completion_issues=completion_issues,
+                case_is_closed=case_is_closed
+            )
+
+        try:
+            approve_and_close_case(
+                final_task=task,
+                approved_by=current_user.email,
+                remarks=form.remarks.data or "",
+            )
+
+            db.session.commit()
+
+        except FinalApprovalError as exc:
+            db.session.rollback()
+
+            flash(
+                str(exc),
+                "error",
+            )
+
+            return render_admin_approval(
+
+                task = task,
+                form = form,
+                prior_tasks=prior_tasks,
+                completion_issues=completion_issues,
+                case_is_closed=case_is_closed
+            )
+
+        except SQLAlchemyError:
+            db.session.rollback()
+
+            current_app.logger.exception(
+                (
+                    "Database error while granting final approval "
+                    "for workflow task %s."
+                ),
+                task.id,
+            )
+
+            flash(
+                (
+                    "A database error occurred. The case was not "
+                    "closed."
+                ),
+                "error",
+            )
+
+
+            return render_admin_approval(
+            
+                task = task,
+                form = form,
+                prior_tasks=prior_tasks,
+                completion_issues=completion_issues,
+                case_is_closed=case_is_closed
+            )
+
+        # flash(
+        #     (
+        #         f"Offboarding case {task.case.case_number} was "
+        #         "approved and closed successfully."
+        #     ),
+        #     "success",
+        # )
+
+        return redirect(
+            url_for(
+                "workflow.admin_approval",
+                task_id=task.id,
+            )
+        )
+
+
+    return render_admin_approval(
+                
+                task = task,
+                form = form,
+                prior_tasks=prior_tasks,
+                completion_issues=completion_issues,
+                case_is_closed=case_is_closed
+            )
+
+
