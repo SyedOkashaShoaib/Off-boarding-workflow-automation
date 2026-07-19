@@ -76,7 +76,7 @@ def build_task_access_url(
     raw_token: str,
 ) -> str:
     """
-    Build the secure bearer-token URL sent to MIS and Hardware.
+    Build the secure bearer-token URL sent to an assigned workflow phase.
     """
 
     return build_absolute_url(
@@ -114,20 +114,18 @@ def task_requires_portal_login(
     task: WorkflowTask,
 ) -> bool:
     """
-    Return whether the assignment must use portal authentication.
+    Return whether an assignment uses the authenticated portal.
 
-    NOC users and final approvers use authenticated portal access.
-    Other departmental users receive task-specific access grants.
+    Only NOC operational tasks use portal authentication.
+    MIS, Hardware, and final Administration tasks use secure,
+    task-specific access grants.
     """
 
     department_name = str(
         task.phase.department.name or ""
     ).strip().upper()
 
-    return bool(
-        task.phase.is_final_approval
-        or department_name == "NOC"
-    )
+    return department_name == "NOC"
 
 
 def format_datetime(
@@ -195,22 +193,27 @@ def create_task_assignment_notification(
     """
     Create a pending task-assignment notification.
 
-    This function adds records to the active SQLAlchemy session but
-    does not commit. The calling workflow controls the transaction.
+    This function adds records to the active SQLAlchemy session
+    but does not commit. The calling workflow controls the
+    transaction.
     """
 
-    subject = (
-        "Offboarding Action Required — "
-        f"{task.case.case_number}"
-    )
+    if task.phase.is_final_approval:
+        subject = (
+            "Final Offboarding Approval Required — "
+            f"{task.case.case_number}"
+        )
+    else:
+        subject = (
+            "Offboarding Action Required — "
+            f"{task.case.case_number}"
+        )
 
     notification = EmailNotification(
         case=task.case,
         workflow_task=task,
         notification_type="TASK_ASSIGNED",
-        recipient_email=(
-            task.assigned_to_email
-        ),
+        recipient_email=task.assigned_to_email,
         subject=subject,
         status="PENDING",
     )
@@ -220,9 +223,7 @@ def create_task_assignment_notification(
     db.session.add(
         AuditLog(
             case=task.case,
-            action=(
-                "TASK_NOTIFICATION_QUEUED"
-            ),
+            action="TASK_NOTIFICATION_QUEUED",
             performed_by="System",
             details=(
                 "Task notification queued for "
@@ -240,11 +241,11 @@ def deliver_task_assignment_notification(
     """
     Attempt delivery of a task-assignment notification.
 
-    NOC and final Admin tasks receive portal-authenticated links.
-    MIS and Hardware tasks receive secure task-specific access links.
+    NOC receives an authenticated portal URL. MIS, Hardware,
+    and Administration receive secure task-specific links.
 
-    This function updates the current SQLAlchemy session but does not
-    commit. The calling workflow remains responsible for committing.
+    This function updates the current SQLAlchemy session but does
+    not commit. The calling workflow controls the transaction.
     """
 
     task = notification.workflow_task
@@ -255,18 +256,43 @@ def deliver_task_assignment_notification(
     notification.error_message = None
     notification.sent_at = None
 
+    is_final_approval = bool(
+        task.phase.is_final_approval
+    )
+
+    if is_final_approval:
+        message_heading = (
+            "Final Offboarding Approval Required"
+        )
+
+        message_intro = (
+            "The departmental clearance phases have been "
+            "completed. Final Administration review and "
+            "approval are now required."
+        )
+
+        link_label = "Open Final Approval"
+
+    else:
+        message_heading = (
+            "Offboarding Action Required"
+        )
+
+        message_intro = (
+            "A new employee offboarding task has been "
+            "assigned."
+        )
+
+        link_label = "Open Assigned Task"
+
     try:
         requires_portal_login = (
-            task_requires_portal_login(
-                task
-            )
+            task_requires_portal_login(task)
         )
 
         if requires_portal_login:
-            task_url = (
-                build_portal_task_url(
-                    task
-                )
+            task_url = build_portal_task_url(
+                task
             )
 
             security_notice = (
@@ -286,24 +312,31 @@ def deliver_task_assignment_notification(
                 ),
             )
 
-            task_url = (
-                build_task_access_url(
-                    raw_token
-                )
+            task_url = build_task_access_url(
+                raw_token
             )
 
-            security_notice = (
-                "This secure link is intended only "
-                "for the assigned department. "
-                "Do not forward it."
-            )
+            if is_final_approval:
+                security_notice = (
+                    "This secure link authorizes access "
+                    "only to this final-approval task. "
+                    "Do not forward or share it."
+                )
+            else:
+                security_notice = (
+                    "This secure link is intended only "
+                    "for the assigned department. "
+                    "Do not forward or share it."
+                )
 
         due_at_text = format_datetime(
             task.due_at
         )
 
         text_body = f"""
-A new employee offboarding task has been assigned.
+{message_heading}
+
+{message_intro}
 
 Case Number: {task.case.case_number}
 Employee: {task.case.employee_name}
@@ -312,11 +345,9 @@ Phase: {task.phase.name}
 Assigned Department: {task.phase.department.name}
 Due At: {due_at_text}
 
-Open the assigned task:
-{task_url}
+{link_label}: {task_url}
 
-Security notice:
-{security_notice}
+Security notice: {security_notice}
 """.strip()
 
         html_body = f"""
@@ -324,71 +355,53 @@ Security notice:
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>
-        {escape(notification.subject)}
-    </title>
+    <title>{escape(notification.subject)}</title>
 </head>
-
 <body>
-    <h1>Offboarding Action Required</h1>
+    <h1>{escape(message_heading)}</h1>
 
-    <p>
-        A new employee offboarding task has been assigned.
-    </p>
+    <p>{escape(message_intro)}</p>
 
-    <table
-        role="presentation"
-        cellpadding="6"
-        cellspacing="0"
-        border="0"
-    >
-        <tr>
-            <th align="left">Case Number</th>
-            <td>
-                {escape(task.case.case_number)}
-            </td>
-        </tr>
+    <table>
+        <tbody>
+            <tr>
+                <th align="left">Case Number</th>
+                <td>{escape(task.case.case_number)}</td>
+            </tr>
 
-        <tr>
-            <th align="left">Employee</th>
-            <td>
-                {escape(task.case.employee_name)}
-            </td>
-        </tr>
+            <tr>
+                <th align="left">Employee</th>
+                <td>{escape(task.case.employee_name)}</td>
+            </tr>
 
-        <tr>
-            <th align="left">Employee ID</th>
-            <td>
-                {escape(task.case.employee_id)}
-            </td>
-        </tr>
+            <tr>
+                <th align="left">Employee ID</th>
+                <td>{escape(task.case.employee_id)}</td>
+            </tr>
 
-        <tr>
-            <th align="left">Phase</th>
-            <td>
-                {escape(task.phase.name)}
-            </td>
-        </tr>
+            <tr>
+                <th align="left">Phase</th>
+                <td>{escape(task.phase.name)}</td>
+            </tr>
 
-        <tr>
-            <th align="left">
-                Assigned Department
-            </th>
-            <td>
-                {
-                    escape(
-                        task.phase.department.name
-                    )
-                }
-            </td>
-        </tr>
+            <tr>
+                <th align="left">
+                    Assigned Department
+                </th>
+                <td>
+                    {
+                        escape(
+                            task.phase.department.name
+                        )
+                    }
+                </td>
+            </tr>
 
-        <tr>
-            <th align="left">Due At</th>
-            <td>
-                {escape(due_at_text)}
-            </td>
-        </tr>
+            <tr>
+                <th align="left">Due At</th>
+                <td>{escape(due_at_text)}</td>
+            </tr>
+        </tbody>
     </table>
 
     <p>
@@ -397,8 +410,8 @@ Security notice:
     </p>
 
     <p>
-        <a href="{escape(task_url)}">
-            Open Assigned Task
+        <a href="{escape(task_url, quote=True)}">
+            {escape(link_label)}
         </a>
     </p>
 </body>
@@ -450,9 +463,7 @@ Security notice:
         notification.sent_at = None
 
         if access_grant is not None:
-            revoke_grant(
-                access_grant
-            )
+            revoke_grant(access_grant)
 
         action = "TASK_NOTIFICATION_FAILED"
 

@@ -107,6 +107,28 @@ def revoke_active_task_grants(
     for grant in active_grants:
         grant.revoked_at = current_time
 
+def get_task_access_token_lifetime_hours(
+    task: WorkflowTask,
+) -> int:
+    """
+    Return the configured token lifetime for the task type.
+
+    Final-approval grants intentionally expire sooner than ordinary
+    departmental checklist grants.
+    """
+
+    if task.phase.is_final_approval:
+        config_key = (
+            "FINAL_APPROVAL_TOKEN_LIFETIME_HOURS"
+        )
+    else:
+        config_key = (
+            "TASK_ACCESS_TOKEN_LIFETIME_HOURS"
+        )
+
+    return int(
+        current_app.config[config_key]
+    )
 
 def issue_task_access_grant(
     *,
@@ -116,14 +138,9 @@ def issue_task_access_grant(
     """
     Generate and persist a new access grant.
 
-    The caller receives the raw token once so it can be inserted into
-    the assignment email. The raw token is not stored.
+    The caller receives the raw token once so it can be inserted
+    into the assignment email. Only the token hash is stored.
     """
-
-    if task.phase.is_final_approval:
-        raise ValueError(
-            "Final approval tasks require portal authentication."
-        )
 
     cleaned_email = str(
         recipient_email or ""
@@ -142,9 +159,11 @@ def issue_task_access_grant(
 
     current_time = utc_now()
 
-    token_lifetime_hours = current_app.config[
-        "TASK_ACCESS_TOKEN_LIFETIME_HOURS"
-    ]
+    token_lifetime_hours = (
+        get_task_access_token_lifetime_hours(
+            task
+        )
+    )
 
     grant = TaskAccessGrant(
         workflow_task=task,
@@ -163,15 +182,20 @@ def issue_task_access_grant(
 
     db.session.add(grant)
 
+    if task.phase.is_final_approval:
+        grant_type = "final-approval"
+    else:
+        grant_type = "departmental"
+
     db.session.add(
         AuditLog(
             case=task.case,
             action="TASK_ACCESS_GRANTED",
             performed_by="System",
             details=(
-                "A secure departmental task-access grant "
-                f"was issued for task {task.id} to "
-                f"'{cleaned_email}'."
+                f"A secure {grant_type} task-access "
+                f"grant was issued for task {task.id} "
+                f"to '{cleaned_email}'."
             ),
         )
     )
@@ -208,9 +232,6 @@ def grant_is_redeemable(
     task = grant.workflow_task
 
     if task is None:
-        return False
-
-    if task.phase.is_final_approval:
         return False
 
     if task.status not in OPEN_TASK_STATUSES:
