@@ -88,7 +88,8 @@ def access_link(raw_token):
 @task_access_bp.post("/continue")
 def continue_to_task():
     """
-    Establish the limited task session after explicit confirmation.
+    Establish the limited task session after explicit confirmation
+    and redirect to the correct workflow interface.
     """
 
     form = TaskAccessContinueForm()
@@ -99,6 +100,21 @@ def continue_to_task():
     grant = activate_pending_task_access()
 
     if grant is None:
+        return render_unavailable()
+
+    task = grant.workflow_task
+
+    if task is None:
+        clear_task_access_session()
+
+        current_app.logger.error(
+            (
+                "Task-access grant %s does not reference "
+                "a valid workflow task."
+            ),
+            grant.id,
+        )
+
         return render_unavailable()
 
     try:
@@ -120,9 +136,18 @@ def continue_to_task():
             503,
         )
 
+    if task.phase.is_final_approval:
+        destination_endpoint = (
+            "workflow.admin_approval"
+        )
+    else:
+        destination_endpoint = (
+            "workflow.view_task"
+        )
+
     return redirect(
         url_for(
-            "workflow.view_task",
-            task_id=grant.workflow_task_id,
+            destination_endpoint,
+            task_id=task.id,
         )
     )
