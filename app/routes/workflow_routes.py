@@ -46,6 +46,7 @@ from app.services.task_access_service import (
     consume_task_access_grants,
     get_session_grant_for_task,
     get_task_access_actor,
+    clear_task_access_session,
 )
 workflow_bp = Blueprint(
     "workflow",
@@ -300,12 +301,7 @@ def authorize_department_task(
     )
 
     if grant is None:
-        return (
-            render_template(
-                "task_access/unavailable.html"
-            ),
-            404,
-        )
+        return render_task_access_unavailable()
 
     return None
 
@@ -328,11 +324,9 @@ def authorize_final_approval_task(
     )
 
     if grant is None:
-        return None, (
-            render_template(
-                "task_access/unavailable.html"
-            ),
-            404,
+        return (
+            None, 
+            render_task_access_unavailable(),
         )
 
     return grant, None
