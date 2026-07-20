@@ -9,7 +9,6 @@ from flask import (
 )
 from flask import abort
 from flask_login import current_user
-from flask_login import login_required
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extension import db
@@ -296,6 +295,34 @@ def authorize_department_task(
 
     return None
 
+def authorize_final_approval_task(
+    task: WorkflowTask,
+):
+    """
+    Authorize access to one final Administration approval task.
+
+    An active grant may submit the approval form. A consumed grant
+    may display the completed approval page through a read-only GET
+    request in the same browser session.
+    """
+
+    grant = get_session_grant_for_task(
+        task,
+        allow_consumed_read_only=(
+            request.method == "GET"
+        ),
+    )
+
+    if grant is None:
+        return None, (
+            render_template(
+                "task_access/unavailable.html"
+            ),
+            404,
+        )
+
+    return grant, None
+
 @workflow_bp.route(
     "/tasks/<int:task_id>",
     methods=["GET", "POST"],
@@ -544,17 +571,22 @@ def view_task(task_id):
         submitted_values=submitted_values,
         validation_errors=validation_errors,
     )
+
 @workflow_bp.route(
     "/tasks/<int:task_id>/approval",
     methods=["GET", "POST"],
 )
-@login_required
 def admin_approval(task_id):
     """
-    Display and process the final Admin approval task.
+    Display and process one token-authorized final approval task.
+
+    The case closure and access-grant consumption occur in one
+    database transaction.
     """
 
-    task = WorkflowTask.query.get_or_404(task_id)
+    task = WorkflowTask.query.get_or_404(
+        task_id
+    )
 
     if not task.phase.is_final_approval:
         return redirect(
@@ -564,16 +596,61 @@ def admin_approval(task_id):
             )
         )
 
-    record_task_opening(task, current_user.email)
+    # --------------------------------------------------------
+    # Authorization
+    # --------------------------------------------------------
+
+    grant, access_response = (
+        authorize_final_approval_task(
+            task
+        )
+    )
+
+    if access_response is not None:
+        return access_response
+
+    approval_actor = str(
+        grant.recipient_email or ""
+    ).strip().lower()
+
+    if not approval_actor:
+        current_app.logger.error(
+            (
+                "Task-access grant %s for final approval "
+                "task %s has no valid recipient email."
+            ),
+            grant.id,
+            task.id,
+        )
+
+        return (
+            render_template(
+                "task_access/unavailable.html"
+            ),
+            404,
+        )
+
+    # Only an authorized Administration session may record
+    # the task as opened.
+    record_task_opening(
+        task,
+        approval_actor,
+    )
 
     form = AdminApprovalForm()
+
+    # --------------------------------------------------------
+    # Approval-page information
+    # --------------------------------------------------------
 
     prior_tasks = sorted(
         [
             case_task
             for case_task in task.case.tasks
-            if case_task.phase.phase_order
-            < task.phase.phase_order
+            if (
+                case_task.phase.phase_order
+                < task.phase.phase_order
+            )
         ],
         key=lambda case_task: (
             case_task.phase.phase_order,
@@ -581,8 +658,10 @@ def admin_approval(task_id):
         ),
     )
 
-    completion_issues = get_prior_phase_completion_issues(
-        task
+    completion_issues = (
+        get_prior_phase_completion_issues(
+            task
+        )
     )
 
     case_is_closed = (
@@ -591,10 +670,18 @@ def admin_approval(task_id):
         or task.status == "APPROVED"
     )
 
+    # --------------------------------------------------------
+    # Approval submission
+    # --------------------------------------------------------
+
     if form.validate_on_submit():
+
         if case_is_closed:
             flash(
-                "This offboarding case has already been closed.",
+                (
+                    "This offboarding case has already "
+                    "been closed."
+                ),
                 "warning",
             )
 
@@ -608,8 +695,9 @@ def admin_approval(task_id):
         if completion_issues:
             flash(
                 (
-                    "The case cannot be approved because one or "
-                    "more previous workflow phases are incomplete."
+                    "The case cannot be approved because "
+                    "one or more previous workflow phases "
+                    "are incomplete."
                 ),
                 "error",
             )
@@ -618,15 +706,27 @@ def admin_approval(task_id):
                 task=task,
                 form=form,
                 prior_tasks=prior_tasks,
-                completion_issues=completion_issues,
-                case_is_closed=case_is_closed
+                completion_issues=(
+                    completion_issues
+                ),
+                case_is_closed=case_is_closed,
             )
+
+        # ----------------------------------------------------
+        # Atomic final-approval transaction
+        # ----------------------------------------------------
 
         try:
             approve_and_close_case(
                 final_task=task,
-                approved_by=current_user.email,
-                remarks=form.remarks.data or "",
+                approved_by=approval_actor,
+                remarks=(
+                    form.remarks.data or ""
+                ),
+            )
+
+            consume_task_access_grants(
+                task
             )
 
             db.session.commit()
@@ -640,12 +740,13 @@ def admin_approval(task_id):
             )
 
             return render_admin_approval(
-
-                task = task,
-                form = form,
+                task=task,
+                form=form,
                 prior_tasks=prior_tasks,
-                completion_issues=completion_issues,
-                case_is_closed=case_is_closed
+                completion_issues=(
+                    completion_issues
+                ),
+                case_is_closed=case_is_closed,
             )
 
         except SQLAlchemyError:
@@ -653,37 +754,29 @@ def admin_approval(task_id):
 
             current_app.logger.exception(
                 (
-                    "Database error while granting final approval "
-                    "for workflow task %s."
+                    "Database error while granting final "
+                    "approval for workflow task %s."
                 ),
                 task.id,
             )
 
             flash(
                 (
-                    "A database error occurred. The case was not "
-                    "closed."
+                    "A database error occurred. The case "
+                    "was not closed."
                 ),
                 "error",
             )
 
-
             return render_admin_approval(
-            
-                task = task,
-                form = form,
+                task=task,
+                form=form,
                 prior_tasks=prior_tasks,
-                completion_issues=completion_issues,
-                case_is_closed=case_is_closed
+                completion_issues=(
+                    completion_issues
+                ),
+                case_is_closed=case_is_closed,
             )
-
-        # flash(
-        #     (
-        #         f"Offboarding case {task.case.case_number} was "
-        #         "approved and closed successfully."
-        #     ),
-        #     "success",
-        # )
 
         return redirect(
             url_for(
@@ -692,14 +785,16 @@ def admin_approval(task_id):
             )
         )
 
+    # --------------------------------------------------------
+    # Initial GET or invalid form submission
+    # --------------------------------------------------------
 
     return render_admin_approval(
-                
-                task = task,
-                form = form,
-                prior_tasks=prior_tasks,
-                completion_issues=completion_issues,
-                case_is_closed=case_is_closed
-            )
+        task=task,
+        form=form,
+        prior_tasks=prior_tasks,
+        completion_issues=completion_issues,
+        case_is_closed=case_is_closed,
+    )
 
 
