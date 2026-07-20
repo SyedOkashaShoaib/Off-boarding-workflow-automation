@@ -247,11 +247,15 @@ def grant_is_redeemable(
     return True
 
 
-def find_redeemable_grant(
+def find_task_access_grant(
     raw_token: str,
 ) -> Optional[TaskAccessGrant]:
     """
-    Resolve a raw email token into an active access grant.
+    Resolve a raw token to its database grant.
+
+    This function performs token lookup only. The caller must
+    separately determine whether the current browser already owns
+    the grant or whether the grant may establish a new session.
     """
 
     cleaned_token = str(
@@ -268,18 +272,13 @@ def find_redeemable_grant(
         cleaned_token
     )
 
-    grant = (
+    return (
         TaskAccessGrant.query
         .filter_by(
             token_hash=token_hash
         )
         .first()
     )
-
-    if not grant_is_redeemable(grant):
-        return None
-
-    return grant
 
 
 def set_pending_task_access(
