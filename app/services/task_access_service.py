@@ -296,7 +296,11 @@ def set_pending_task_access(
 def activate_pending_task_access(
 ) -> Optional[TaskAccessGrant]:
     """
-    Convert a pending grant into an active limited task session.
+    Atomically claim a pending grant and bind it to the current
+    browser session.
+
+    Only the first confirmation request may change access_count
+    from zero to one.
     """
 
     grant_id = session.get(
@@ -316,7 +320,54 @@ def activate_pending_task_access(
             PENDING_GRANT_SESSION_KEY,
             None,
         )
+
         return None
+
+    current_time = utc_now()
+
+    # Use a conditional database update rather than only assigning
+    # grant.access_count = 1. This prevents two browser sessions
+    # that confirmed at nearly the same time from both claiming
+    # the grant.
+    claimed_row_count = (
+        db.session.query(
+            TaskAccessGrant
+        )
+        .filter(
+            TaskAccessGrant.id == grant.id,
+            TaskAccessGrant.access_count == 0,
+            TaskAccessGrant.revoked_at.is_(None),
+            TaskAccessGrant.consumed_at.is_(None),
+            TaskAccessGrant.expires_at
+            > current_time,
+        )
+        .update(
+            {
+                TaskAccessGrant.access_count: 1,
+                TaskAccessGrant.last_accessed_at: (
+                    current_time
+                ),
+            },
+            synchronize_session=False,
+        )
+    )
+
+    if claimed_row_count != 1:
+        session.pop(
+            PENDING_GRANT_SESSION_KEY,
+            None,
+        )
+
+        return None
+
+    # Refresh only the values changed by the conditional update.
+    db.session.expire(
+        grant,
+        [
+            "access_count",
+            "last_accessed_at",
+        ],
+    )
 
     session[
         ACTIVE_GRANT_SESSION_KEY
@@ -331,19 +382,14 @@ def activate_pending_task_access(
         None,
     )
 
-    grant.last_accessed_at = utc_now()
-    grant.access_count = (
-        int(grant.access_count or 0) + 1
-    )
-
     db.session.add(
         AuditLog(
             case=grant.workflow_task.case,
             action="TASK_ACCESS_ACTIVATED",
             performed_by=grant.recipient_email,
             details=(
-                "A secure departmental task-access session "
-                f"was activated for task "
+                "A secure workflow task-access "
+                "session was activated for task "
                 f"{grant.workflow_task_id}."
             ),
         )
