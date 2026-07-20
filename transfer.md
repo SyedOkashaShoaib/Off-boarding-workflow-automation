@@ -1,4 +1,1 @@
-Select-String `
-    -Path app\routes\case_routes.py `
-    -Pattern "case_created|case_detail|@case_bp" `
-    -Context 2,3
+http://127.0.0.1:5000/cases/40
