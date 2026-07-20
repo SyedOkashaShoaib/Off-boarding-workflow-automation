@@ -39,7 +39,30 @@ def render_unavailable():
         ),
         404,
     )
+def redirect_to_grant_task(
+    grant,
+):
+    """
+    Redirect an authorized grant to its correct workflow interface.
+    """
 
+    task = grant.workflow_task
+
+    if task.phase.is_final_approval:
+        endpoint = (
+            "workflow.admin_approval"
+        )
+    else:
+        endpoint = (
+            "workflow.view_task"
+        )
+
+    return redirect(
+        url_for(
+            endpoint,
+            task_id=task.id,
+        )
+    )
 
 @task_access_bp.after_request
 def secure_task_access_response(response):
