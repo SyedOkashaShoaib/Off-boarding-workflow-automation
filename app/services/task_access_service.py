@@ -207,7 +207,11 @@ def grant_is_redeemable(
     grant: Optional[TaskAccessGrant],
 ) -> bool:
     """
-    Return whether a token can establish a new task session.
+    Return whether a grant may establish a new browser session.
+
+    A grant with an existing activation cannot establish another
+    browser session. The already-authorized browser is validated
+    separately through its signed Flask session.
     """
 
     if grant is None:
@@ -217,6 +221,9 @@ def grant_is_redeemable(
         return False
 
     if grant.consumed_at is not None:
+        return False
+
+    if int(grant.access_count or 0) > 0:
         return False
 
     expires_at = normalize_datetime(
