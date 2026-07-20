@@ -1,0 +1,108 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>
+        {% block title %}
+            Department Task
+        {% endblock %}
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for(
+            'static',
+            filename='css/app.css'
+        ) }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for(
+            'static',
+            filename='css/pages/task_access.css'
+        ) }}"
+    >
+
+    {% block head %}{% endblock %}
+</head>
+
+
+<body class="task-access-body">
+
+    <a
+        class="skip-link"
+        href="#main-content"
+    >
+        Skip to main content
+    </a>
+
+
+    <header class="task-access-header">
+
+        <div>
+            <div class="task-access-header__company">
+                Barrett Hodgson
+            </div>
+
+            <div class="task-access-header__system">
+                Offboarding Workflow System
+            </div>
+        </div>
+
+    </header>
+
+
+    <main
+        id="main-content"
+        class="task-access-workspace"
+    >
+
+        {% with messages = get_flashed_messages(
+            with_categories=true
+        ) %}
+
+            {% if messages %}
+                <div aria-live="polite">
+                    {% for category, message in messages %}
+                        <div
+                            class="
+                                system-message
+                                system-message--{{ category }}
+                            "
+                        >
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+        {% endwith %}
+
+
+        {% block breadcrumbs %}{% endblock %}
+
+        {% block page_header %}{% endblock %}
+
+        {% block content %}{% endblock %}
+
+    </main>
+
+
+    <footer class="task-access-footer">
+        Secure workflow task access
+    </footer>
+
+    {% block scripts %}{% endblock %}
+
+</body>
+
+</html>

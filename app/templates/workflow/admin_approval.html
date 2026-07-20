@@ -1,0 +1,273 @@
+{% extends "layouts/task_base.html" %}
+{% block title %}
+    {{ task.case.case_number }} · Final Approval
+{% endblock %}
+{% block content %}
+
+<section>
+    <h1>Admin Final Approval</h1>
+
+    <p>
+        Review the completed departmental clearances before
+        closing the offboarding case.
+    </p>
+</section>
+
+
+<section>
+    <h2>Case Details</h2>
+
+    <p>
+        <strong>Case Number:</strong>
+        {{ task.case.case_number }}
+    </p>
+
+    <p>
+        <strong>Employee Name:</strong>
+        {{ task.case.employee_name }}
+    </p>
+
+    <p>
+        <strong>Employee ID:</strong>
+        {{ task.case.employee_id }}
+    </p>
+
+    <p>
+        <strong>Designation:</strong>
+        {{ task.case.designation }}
+    </p>
+
+    <p>
+        <strong>Employee Department:</strong>
+        {{ task.case.department }}
+    </p>
+
+    <p>
+        <strong>Line Manager:</strong>
+        {{ task.case.line_manager }}
+    </p>
+
+    <p>
+        <strong>Last Working Day:</strong>
+        {{ task.case.last_working_day.strftime(
+            "%d %B %Y"
+        ) }}
+    </p>
+
+    <p>
+        <strong>Case Status:</strong>
+        {{ task.case.status }}
+    </p>
+</section>
+
+
+<section>
+    <h2>Final Approval Task</h2>
+
+    <p>
+        <strong>Responsible Department:</strong>
+        {{ task.phase.department.name }}
+    </p>
+
+    <p>
+        <strong>Assigned Email:</strong>
+        {{ task.assigned_to_email }}
+    </p>
+
+    <p>
+        <strong>Task Status:</strong>
+        {{ task.status }}
+    </p>
+
+    <p>
+        <strong>Assigned At:</strong>
+        {{ task.assigned_at.strftime(
+            "%d %B %Y, %I:%M %p"
+        ) }}
+    </p>
+
+    <p>
+        <strong>Opened At:</strong>
+
+        {% if task.opened_at %}
+            {{ task.opened_at.strftime(
+                "%d %B %Y, %I:%M %p"
+            ) }}
+        {% else %}
+            Not recorded
+        {% endif %}
+    </p>
+</section>
+
+
+<section>
+    <h2>Departmental Clearance Summary</h2>
+
+    {% if prior_tasks %}
+
+        <table border="1">
+
+            <thead>
+                <tr>
+                    <th>Phase</th>
+                    <th>Department</th>
+                    <th>Task Status</th>
+                    <th>Submitted At</th>
+                    <th>Responses</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                {% for prior_task in prior_tasks %}
+
+                    <tr>
+                        <td>
+                            {{ prior_task.phase.name }}
+                        </td>
+
+                        <td>
+                            {{ prior_task.phase.department.name }}
+                        </td>
+
+                        <td>
+                            {{ prior_task.status }}
+                        </td>
+
+                        <td>
+                            {% if prior_task.submitted_at %}
+                                {{ prior_task.submitted_at.strftime(
+                                    "%d %B %Y, %I:%M %p"
+                                ) }}
+                            {% else %}
+                                Not submitted
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {{ prior_task.responses | length }}
+                        </td>
+                    </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    {% else %}
+
+        <p>
+            No previous departmental tasks were found.
+        </p>
+
+    {% endif %}
+</section>
+
+
+{% if completion_issues %}
+
+    <section>
+        <h2>Approval Blocked</h2>
+
+        <p>
+            The case cannot be closed because the following
+            workflow requirements are incomplete:
+        </p>
+
+        <ul>
+            {% for issue in completion_issues %}
+                <li>{{ issue }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+
+{% endif %}
+
+
+{% if case_is_closed %}
+
+    <section>
+        <h2>Case Closed</h2>
+
+        <p>
+            This offboarding case has received final approval
+            and is now closed.
+        </p>
+
+        <p>
+            <strong>Closed At:</strong>
+
+            {% if task.case.closed_at %}
+                {{ task.case.closed_at.strftime(
+                    "%d %B %Y, %I:%M %p"
+                ) }}
+            {% else %}
+                Not recorded
+            {% endif %}
+        </p>
+
+        <p>
+            <strong>Final Task Status:</strong>
+            {{ task.status }}
+        </p>
+    </section>
+
+{% elif not completion_issues %}
+
+    <section>
+        <h2>Grant Final Approval</h2>
+
+        <form
+            method="post"
+            action="{{ url_for(
+                'workflow.admin_approval',
+                task_id=task.id
+            ) }}"
+        >
+
+            {{ form.hidden_tag() }}
+
+            <div>
+                {{ form.clearance_confirmed() }}
+
+                {{ form.clearance_confirmed.label }}
+
+                {% for error in
+                    form.clearance_confirmed.errors %}
+                    <p>
+                        <strong>{{ error }}</strong>
+                    </p>
+                {% endfor %}
+            </div>
+
+            <div>
+                {{ form.remarks.label }}
+
+                <br>
+
+                {{ form.remarks(
+                    rows=5,
+                    maxlength=2000
+                ) }}
+
+                {% for error in form.remarks.errors %}
+                    <p>
+                        <strong>{{ error }}</strong>
+                    </p>
+                {% endfor %}
+            </div>
+
+            <p>
+                Approving this task will permanently mark the
+                offboarding case as closed.
+            </p>
+
+            {{ form.submit() }}
+
+        </form>
+    </section>
+
+{% endif %}
+
+{% endblock %}
