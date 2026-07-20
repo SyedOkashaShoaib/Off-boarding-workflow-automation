@@ -217,7 +217,7 @@ def case_created(case_id):
         ),
     )
 
-@case_bp.get("/int:case_id") 
+@case_bp.get("/<int:case_id>") 
 @login_required 
 def case_detail(case_id): 
     """ Display the complete read-only operational record for one offboarding case.
