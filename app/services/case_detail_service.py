@@ -13,8 +13,10 @@ from app.models import (
     WorkflowPhase,
     WorkflowTask,
 )
-
-
+OPEN_TASK_STATUSES = (
+    "PENDING",
+    "IN_PROGRESS",
+)
 @dataclass(frozen=True)
 class CaseDetailRecord:
     """
@@ -92,15 +94,26 @@ def get_case_detail_record(
         ),
     )
 
-    current_task = next(
-    (
-        task
-        for task in tasks
-        if task.phase_id
-        == case.current_phase_id
-    ),
-    None,
-    )
+    # current_task = next(
+    # (
+    #     task
+    #     for task in tasks
+    #     if task.phase_id
+    #     == case.current_phase_id
+    # ),
+    # None,
+    # )
+    current_task = None
+    if case.status != 'CLOSED':
+        current_task = next (
+            (
+                task
+                for task in tasks
+                if (
+                    task.phase_id == case.current_phase_id and task.status in OPEN_TASK_STATUSES
+                )
+            ), None,
+        )
 
     audit_logs = sorted(
         case.audit_logs,
