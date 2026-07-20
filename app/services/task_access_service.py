@@ -107,6 +107,28 @@ def revoke_active_task_grants(
     for grant in active_grants:
         grant.revoked_at = current_time
 
+def get_task_access_token_lifetime_hours(
+    task: WorkflowTask,
+) -> int:
+    """
+    Return the configured token lifetime for the task type.
+
+    Final-approval grants intentionally expire sooner than ordinary
+    departmental checklist grants.
+    """
+
+    if task.phase.is_final_approval:
+        config_key = (
+            "FINAL_APPROVAL_TOKEN_LIFETIME_HOURS"
+        )
+    else:
+        config_key = (
+            "TASK_ACCESS_TOKEN_LIFETIME_HOURS"
+        )
+
+    return int(
+        current_app.config[config_key]
+    )
 
 def issue_task_access_grant(
     *,
@@ -116,14 +138,9 @@ def issue_task_access_grant(
     """
     Generate and persist a new access grant.
 
-    The caller receives the raw token once so it can be inserted into
-    the assignment email. The raw token is not stored.
+    The caller receives the raw token once so it can be inserted
+    into the assignment email. Only the token hash is stored.
     """
-
-    if task.phase.is_final_approval:
-        raise ValueError(
-            "Final approval tasks require portal authentication."
-        )
 
     cleaned_email = str(
         recipient_email or ""
@@ -142,9 +159,11 @@ def issue_task_access_grant(
 
     current_time = utc_now()
 
-    token_lifetime_hours = current_app.config[
-        "TASK_ACCESS_TOKEN_LIFETIME_HOURS"
-    ]
+    token_lifetime_hours = (
+        get_task_access_token_lifetime_hours(
+            task
+        )
+    )
 
     grant = TaskAccessGrant(
         workflow_task=task,
@@ -163,15 +182,20 @@ def issue_task_access_grant(
 
     db.session.add(grant)
 
+    if task.phase.is_final_approval:
+        grant_type = "final-approval"
+    else:
+        grant_type = "departmental"
+
     db.session.add(
         AuditLog(
             case=task.case,
             action="TASK_ACCESS_GRANTED",
             performed_by="System",
             details=(
-                "A secure departmental task-access grant "
-                f"was issued for task {task.id} to "
-                f"'{cleaned_email}'."
+                f"A secure {grant_type} task-access "
+                f"grant was issued for task {task.id} "
+                f"to '{cleaned_email}'."
             ),
         )
     )
@@ -183,7 +207,11 @@ def grant_is_redeemable(
     grant: Optional[TaskAccessGrant],
 ) -> bool:
     """
-    Return whether a token can establish a new task session.
+    Return whether a grant may establish a new browser session.
+
+    A grant with an existing activation cannot establish another
+    browser session. The already-authorized browser is validated
+    separately through its signed Flask session.
     """
 
     if grant is None:
@@ -193,6 +221,9 @@ def grant_is_redeemable(
         return False
 
     if grant.consumed_at is not None:
+        return False
+
+    if int(grant.access_count or 0) > 0:
         return False
 
     expires_at = normalize_datetime(
@@ -210,20 +241,21 @@ def grant_is_redeemable(
     if task is None:
         return False
 
-    if task.phase.is_final_approval:
-        return False
-
     if task.status not in OPEN_TASK_STATUSES:
         return False
 
     return True
 
 
-def find_redeemable_grant(
+def find_task_access_grant(
     raw_token: str,
 ) -> Optional[TaskAccessGrant]:
     """
-    Resolve a raw email token into an active access grant.
+    Resolve a raw token to its database grant.
+
+    This function performs token lookup only. The caller must
+    separately determine whether the current browser already owns
+    the grant or whether the grant may establish a new session.
     """
 
     cleaned_token = str(
@@ -240,18 +272,13 @@ def find_redeemable_grant(
         cleaned_token
     )
 
-    grant = (
+    return (
         TaskAccessGrant.query
         .filter_by(
             token_hash=token_hash
         )
         .first()
     )
-
-    if not grant_is_redeemable(grant):
-        return None
-
-    return grant
 
 
 def set_pending_task_access(
@@ -269,7 +296,11 @@ def set_pending_task_access(
 def activate_pending_task_access(
 ) -> Optional[TaskAccessGrant]:
     """
-    Convert a pending grant into an active limited task session.
+    Atomically claim a pending grant and bind it to the current
+    browser session.
+
+    Only the first confirmation request may change access_count
+    from zero to one.
     """
 
     grant_id = session.get(
@@ -289,7 +320,54 @@ def activate_pending_task_access(
             PENDING_GRANT_SESSION_KEY,
             None,
         )
+
         return None
+
+    current_time = utc_now()
+
+    # Use a conditional database update rather than only assigning
+    # grant.access_count = 1. This prevents two browser sessions
+    # that confirmed at nearly the same time from both claiming
+    # the grant.
+    claimed_row_count = (
+        db.session.query(
+            TaskAccessGrant
+        )
+        .filter(
+            TaskAccessGrant.id == grant.id,
+            TaskAccessGrant.access_count == 0,
+            TaskAccessGrant.revoked_at.is_(None),
+            TaskAccessGrant.consumed_at.is_(None),
+            TaskAccessGrant.expires_at
+            > current_time,
+        )
+        .update(
+            {
+                TaskAccessGrant.access_count: 1,
+                TaskAccessGrant.last_accessed_at: (
+                    current_time
+                ),
+            },
+            synchronize_session=False,
+        )
+    )
+
+    if claimed_row_count != 1:
+        session.pop(
+            PENDING_GRANT_SESSION_KEY,
+            None,
+        )
+
+        return None
+
+    # Refresh only the values changed by the conditional update.
+    db.session.expire(
+        grant,
+        [
+            "access_count",
+            "last_accessed_at",
+        ],
+    )
 
     session[
         ACTIVE_GRANT_SESSION_KEY
@@ -304,37 +382,34 @@ def activate_pending_task_access(
         None,
     )
 
-    grant.last_accessed_at = utc_now()
-    grant.access_count = (
-        int(grant.access_count or 0) + 1
-    )
-
     db.session.add(
         AuditLog(
             case=grant.workflow_task.case,
             action="TASK_ACCESS_ACTIVATED",
             performed_by=grant.recipient_email,
             details=(
-                "A secure departmental task-access session "
-                f"was activated for task "
+                "A secure workflow task-access "
+                "session was activated for task "
                 f"{grant.workflow_task_id}."
             ),
         )
     )
 
     return grant
-
-
 def get_session_grant_for_task(
     task: WorkflowTask,
     *,
     allow_consumed_read_only: bool = False,
 ) -> Optional[TaskAccessGrant]:
     """
-    Return the grant authorising the current browser session.
+    Return the grant authorizing the current browser session.
 
-    A consumed grant may continue displaying the submitted read-only
-    page in the same browser session, but may not submit another POST.
+    The signed Flask session must identify both the supplied task
+    and its active access grant. Revoked, expired, or otherwise
+    invalid grants cannot authorize the request.
+
+    A consumed grant may display a completed task through a
+    read-only GET request in the same browser session.
     """
 
     grant_id = session.get(
@@ -345,15 +420,22 @@ def get_session_grant_for_task(
         ACTIVE_TASK_SESSION_KEY
     )
 
-    if (
-        grant_id is None
-        or task_id != task.id
-    ):
+    if grant_id is None or task_id is None:
+        return None
+
+    try:
+        normalized_grant_id = int(grant_id)
+        normalized_task_id = int(task_id)
+
+    except (TypeError, ValueError):
+        return None
+
+    if normalized_task_id != task.id:
         return None
 
     grant = db.session.get(
         TaskAccessGrant,
-        grant_id,
+        normalized_grant_id,
     )
 
     if grant is None:
@@ -375,6 +457,11 @@ def get_session_grant_for_task(
     ):
         return None
 
+    # A grant must have completed the confirmation POST before
+    # it can authorize an operational task URL.
+    if int(grant.access_count or 0) < 1:
+        return None
+
     if grant.consumed_at is not None:
         if (
             allow_consumed_read_only
@@ -388,6 +475,38 @@ def get_session_grant_for_task(
         return None
 
     return grant
+
+def session_owns_task_access_grant(
+    grant: Optional[TaskAccessGrant],
+    *,
+    allow_consumed_read_only: bool = False,
+) -> bool:
+    """
+    Return whether the current browser session already owns the
+    supplied task-access grant.
+    """
+
+    if grant is None:
+        return False
+
+    task = grant.workflow_task
+
+    if task is None:
+        return False
+
+    session_grant = (
+        get_session_grant_for_task(
+            task,
+            allow_consumed_read_only=(
+                allow_consumed_read_only
+            ),
+        )
+    )
+
+    if session_grant is None:
+        return False
+
+    return session_grant.id == grant.id
 
 
 def consume_task_access_grants(

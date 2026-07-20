@@ -2,7 +2,11 @@
 
 
 {% block title %}
-    Open Assigned Task
+    {% if task.phase.is_final_approval %}
+        Open Final Approval
+    {% else %}
+        Open Assigned Task
+    {% endif %}
 {% endblock %}
 
 
@@ -10,38 +14,64 @@
 
 <section class="task-access-card">
 
-    <h1>Departmental Clearance Assignment</h1>
+    {% if task.phase.is_final_approval %}
 
-    <p>
-        Confirm that you want to open the assigned
-        employee offboarding task.
-    </p>
+        <h1>Final Offboarding Approval</h1>
+
+        <p>
+            Confirm that you want to open the assigned
+            Administration approval task.
+        </p>
+
+    {% else %}
+
+        <h1>Departmental Clearance Assignment</h1>
+
+        <p>
+            Confirm that you want to open the assigned employee
+            offboarding task.
+        </p>
+
+    {% endif %}
 
 
     <dl class="task-access-summary">
 
         <div>
             <dt>Case Number</dt>
-            <dd>{{ task.case.case_number }}</dd>
+
+            <dd>
+                {{ task.case.case_number }}
+            </dd>
         </div>
 
         <div>
             <dt>Employee</dt>
-            <dd>{{ task.case.employee_name }}</dd>
+
+            <dd>
+                {{ task.case.employee_name }}
+            </dd>
         </div>
 
         <div>
             <dt>Responsible Department</dt>
-            <dd>{{ task.phase.department.name }}</dd>
+
+            <dd>
+                {{ task.phase.department.name }}
+            </dd>
         </div>
 
         <div>
             <dt>Assigned Task</dt>
-            <dd>{{ task.phase.name }}</dd>
+
+            <dd>
+                {{ task.phase.name }}
+            </dd>
         </div>
 
         <div>
             <dt>Due Date</dt>
+
             <dd>
                 {% if task.due_at %}
                     {{ task.due_at.strftime(
@@ -61,7 +91,7 @@
         <strong>Secure assignment link</strong>
 
         <p>
-            This link provides access only to this task.
+            This link provides access only to this workflow task.
             Do not forward or share it.
         </p>
 
@@ -77,9 +107,16 @@
     >
         {{ form.hidden_tag() }}
 
-        {{ form.submit(
-            class_="btn-primary"
-        ) }}
+        <button
+            type="submit"
+            class="btn-primary"
+        >
+            {% if task.phase.is_final_approval %}
+                Open Final Approval
+            {% else %}
+                Open Assigned Task
+            {% endif %}
+        </button>
     </form>
 
 </section>

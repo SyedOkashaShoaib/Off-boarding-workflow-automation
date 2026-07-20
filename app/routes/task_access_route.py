@@ -14,8 +14,11 @@ from app.forms.auth_forms import (
 from app.services.task_access_service import (
     activate_pending_task_access,
     clear_task_access_session,
-    find_redeemable_grant,
     set_pending_task_access,
+    find_task_access_grant,
+    grant_is_redeemable,
+    session_owns_task_access_grant,
+    
 )
 
 
@@ -39,7 +42,30 @@ def render_unavailable():
         ),
         404,
     )
+def redirect_to_grant_task(
+    grant,
+):
+    """
+    Redirect an authorized grant to its correct workflow interface.
+    """
 
+    task = grant.workflow_task
+
+    if task.phase.is_final_approval:
+        endpoint = (
+            "workflow.admin_approval"
+        )
+    else:
+        endpoint = (
+            "workflow.view_task"
+        )
+
+    return redirect(
+        url_for(
+            endpoint,
+            task_id=task.id,
+        )
+    )
 
 @task_access_bp.after_request
 def secure_task_access_response(response):
@@ -62,19 +88,40 @@ def secure_task_access_response(response):
 @task_access_bp.get("/<string:raw_token>")
 def access_link(raw_token):
     """
-    Validate an emailed access token and display a continuation page.
+    Resolve an emailed token.
 
-    This GET does not mark the task as opened.
+    A browser that already owns the grant is returned directly to
+    the task. An unactivated grant displays the confirmation page.
+    A grant activated in another browser is denied.
     """
 
-    grant = find_redeemable_grant(
+    grant = find_task_access_grant(
         raw_token
     )
 
     if grant is None:
         return render_unavailable()
 
-    set_pending_task_access(grant)
+    # The already-authorized browser may reopen the original link.
+    # This is checked before grant_is_redeemable(), because an
+    # activated grant intentionally has access_count greater than
+    # zero.
+    if session_owns_task_access_grant(
+        grant,
+        allow_consumed_read_only=True,
+    ):
+        return redirect_to_grant_task(
+            grant
+        )
+
+    # No other browser may establish another session after the
+    # first activation.
+    if not grant_is_redeemable(grant):
+        return render_unavailable()
+
+    set_pending_task_access(
+        grant
+    )
 
     form = TaskAccessContinueForm()
 
@@ -88,7 +135,8 @@ def access_link(raw_token):
 @task_access_bp.post("/continue")
 def continue_to_task():
     """
-    Establish the limited task session after explicit confirmation.
+    Claim the pending grant, establish the limited browser session,
+    and redirect to the correct workflow interface.
     """
 
     form = TaskAccessContinueForm()
@@ -99,6 +147,26 @@ def continue_to_task():
     grant = activate_pending_task_access()
 
     if grant is None:
+        # This also rolls back a conditional claim if task state
+        # changed before the activation transaction completed.
+        db.session.rollback()
+
+        return render_unavailable()
+
+    task = grant.workflow_task
+
+    if task is None:
+        db.session.rollback()
+        clear_task_access_session()
+
+        current_app.logger.error(
+            (
+                "Task-access grant %s does not "
+                "reference a valid workflow task."
+            ),
+            grant.id,
+        )
+
         return render_unavailable()
 
     try:
@@ -109,7 +177,10 @@ def continue_to_task():
         clear_task_access_session()
 
         current_app.logger.exception(
-            "Could not activate task-access grant %s.",
+            (
+                "Could not activate task-access "
+                "grant %s."
+            ),
             grant.id,
         )
 
@@ -120,9 +191,6 @@ def continue_to_task():
             503,
         )
 
-    return redirect(
-        url_for(
-            "workflow.view_task",
-            task_id=grant.workflow_task_id,
-        )
+    return redirect_to_grant_task(
+        grant
     )

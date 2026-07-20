@@ -87,6 +87,12 @@ class Config:
             default=336, #14 days. 
         )
     )
+    FINAL_APPROVAL_TOKEN_LIFETIME_HOURS = (
+    environment_positive_integer(
+        "FINAL_APPROVAL_TOKEN_LIFETIME_HOURS",
+        default=72,
+    )
+)
     # Session cookie cannot be accessed through JavaScript.
     SESSION_COOKIE_HTTPONLY = True
 
