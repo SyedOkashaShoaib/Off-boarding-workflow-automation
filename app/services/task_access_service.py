@@ -398,69 +398,37 @@ def activate_pending_task_access(
     return grant
 
 
-def get_session_grant_for_task(
-    task: WorkflowTask,
+def session_owns_task_access_grant(
+    grant: Optional[TaskAccessGrant],
     *,
     allow_consumed_read_only: bool = False,
-) -> Optional[TaskAccessGrant]:
+) -> bool:
     """
-    Return the grant authorising the current browser session.
-
-    A consumed grant may continue displaying the submitted read-only
-    page in the same browser session, but may not submit another POST.
+    Return whether the current browser session already owns the
+    supplied task-access grant.
     """
-
-    grant_id = session.get(
-        ACTIVE_GRANT_SESSION_KEY
-    )
-
-    task_id = session.get(
-        ACTIVE_TASK_SESSION_KEY
-    )
-
-    if (
-        grant_id is None
-        or task_id != task.id
-    ):
-        return None
-
-    grant = db.session.get(
-        TaskAccessGrant,
-        grant_id,
-    )
 
     if grant is None:
-        return None
+        return False
 
-    if grant.workflow_task_id != task.id:
-        return None
+    task = grant.workflow_task
 
-    if grant.revoked_at is not None:
-        return None
+    if task is None:
+        return False
 
-    expires_at = normalize_datetime(
-        grant.expires_at
+    session_grant = (
+        get_session_grant_for_task(
+            task,
+            allow_consumed_read_only=(
+                allow_consumed_read_only
+            ),
+        )
     )
 
-    if (
-        expires_at is None
-        or expires_at <= utc_now()
-    ):
-        return None
+    if session_grant is None:
+        return False
 
-    if grant.consumed_at is not None:
-        if (
-            allow_consumed_read_only
-            and request.method == "GET"
-        ):
-            return grant
-
-        return None
-
-    if task.status not in OPEN_TASK_STATUSES:
-        return None
-
-    return grant
+    return session_grant.id == grant.id
 
 
 def consume_task_access_grants(
