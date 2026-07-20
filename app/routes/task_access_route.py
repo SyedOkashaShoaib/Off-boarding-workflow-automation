@@ -85,19 +85,40 @@ def secure_task_access_response(response):
 @task_access_bp.get("/<string:raw_token>")
 def access_link(raw_token):
     """
-    Validate an emailed access token and display a continuation page.
+    Resolve an emailed token.
 
-    This GET does not mark the task as opened.
+    A browser that already owns the grant is returned directly to
+    the task. An unactivated grant displays the confirmation page.
+    A grant activated in another browser is denied.
     """
 
-    grant = find_redeemable_grant(
+    grant = find_task_access_grant(
         raw_token
     )
 
     if grant is None:
         return render_unavailable()
 
-    set_pending_task_access(grant)
+    # The already-authorized browser may reopen the original link.
+    # This is checked before grant_is_redeemable(), because an
+    # activated grant intentionally has access_count greater than
+    # zero.
+    if session_owns_task_access_grant(
+        grant,
+        allow_consumed_read_only=True,
+    ):
+        return redirect_to_grant_task(
+            grant
+        )
+
+    # No other browser may establish another session after the
+    # first activation.
+    if not grant_is_redeemable(grant):
+        return render_unavailable()
+
+    set_pending_task_access(
+        grant
+    )
 
     form = TaskAccessContinueForm()
 
