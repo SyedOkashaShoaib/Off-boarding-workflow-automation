@@ -1,41 +1,36 @@
-from flask import (
-    current_app,
-    render_template,
-)
-
-render_failures = []
+sensitive_output_problems = []
 
 with current_app.test_request_context():
-    for case in OffboardingCase.query.order_by(
-        OffboardingCase.id.asc()
-    ).all():
-        try:
-            record = get_case_detail_record(
-                case.id
-            )
+    for case in OffboardingCase.query.all():
+        record = get_case_detail_record(
+            case.id
+        )
 
-            rendered_html = render_template(
-                "cases/detail.html",
-                record=record,
-            )
+        rendered_html = render_template(
+            "cases/detail.html",
+            record=record,
+        ).lower()
 
-            if not rendered_html.strip():
-                render_failures.append(
-                    (
-                        case.id,
-                        case.case_number,
-                        "Empty rendered output",
-                    )
-                )
+        forbidden_terms = [
+            "token_hash",
+            "task_access_grants",
+            "raw_token",
+            "/task-access/",
+        ]
 
-        except Exception as exc:
-            render_failures.append(
+        detected = [
+            term
+            for term in forbidden_terms
+            if term in rendered_html
+        ]
+
+        if detected:
+            sensitive_output_problems.append(
                 (
                     case.id,
                     case.case_number,
-                    type(exc).__name__,
-                    str(exc),
+                    detected,
                 )
             )
 
-render_failures
+sensitive_output_problems
