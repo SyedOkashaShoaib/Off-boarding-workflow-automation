@@ -245,6 +245,20 @@ def record_task_opening(
             "warning",
         )
 
+def render_task_access_unavailable():
+    """
+    Return a neutral task-access response without revealing
+    whether the requested workflow task exists.
+    """
+
+    clear_task_access_session()
+
+    return (
+        render_template(
+            "task_access/unavailable.html"
+        ),
+        404,
+    )
 def authorize_department_task(
     task: WorkflowTask,
 ):
