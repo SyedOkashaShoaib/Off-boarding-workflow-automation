@@ -1,46 +1,433 @@
-/* ============================================================
-   Case detail foundation
-   ============================================================ */
-
-.case-detail-page {
-    display: grid;
-    gap: 18px;
-}
+{% extends "base.html" %}
 
 
-.detail-grid {
-    display: grid;
-    grid-template-columns:
-        repeat(2, minmax(0, 1fr));
-    gap: 14px 24px;
-    margin: 0;
-}
+{% block title %}
+    {{ record.case.case_number }} · Case Details
+{% endblock %}
 
 
-.detail-grid > div {
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border-light);
-}
+{% block breadcrumbs %}
+
+<nav
+    class="breadcrumbs"
+    aria-label="Breadcrumb"
+>
+    <ol class="breadcrumbs__list">
+
+        <li>
+            Operations
+        </li>
+
+        <li>
+            <a href="{{ url_for('cases.list_cases') }}">
+                Cases
+            </a>
+        </li>
+
+        <li aria-current="page">
+            {{ record.case.case_number }}
+        </li>
+
+    </ol>
+</nav>
+
+{% endblock %}
 
 
-.detail-grid dt {
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 600;
-}
+{% block page_header %}
+
+<div class="page-header">
+
+    <div>
+        <h1>
+            {{ record.case.case_number }}
+        </h1>
+
+        <p>
+            {{ record.case.employee_name }}
+            · Employee offboarding case
+        </p>
+    </div>
+
+    <a
+        href="{{ url_for('cases.list_cases') }}"
+        class="btn-secondary"
+    >
+        Back to Cases
+    </a>
+
+</div>
+
+{% endblock %}
 
 
-.detail-grid dd {
-    margin: 4px 0 0;
-    font-weight: 600;
-    overflow-wrap: anywhere;
-}
+{% block content %}
+
+{% set case_status_labels = {
+    "CREATED": "Created",
+    "IN_PROGRESS": "In Progress",
+    "CLOSED": "Closed"
+} %}
 
 
-@media (max-width: 760px) {
+{% set task_status_labels = {
+    "PENDING": "Pending",
+    "IN_PROGRESS": "In Progress",
+    "SUBMITTED": "Submitted",
+    "APPROVED": "Approved"
+} %}
 
-    .detail-grid {
-        grid-template-columns: 1fr;
-    }
 
-}
+<div class="case-detail-page">
+
+    <section class="panel">
+
+        <div class="panel__heading">
+            <h2>Offboarding Case Information</h2>
+        </div>
+
+
+        <dl class="detail-grid">
+
+            <div>
+                <dt>Case Number</dt>
+                <dd>{{ record.case.case_number }}</dd>
+            </div>
+
+            <div>
+                <dt>Case Status</dt>
+                <dd>
+                    {{
+                        case_status_labels.get(
+                            record.case.status,
+                            record.case.status
+                            | replace("_", " ")
+                            | title
+                        )
+                    }}
+                </dd>
+            </div>
+
+            <div>
+                <dt>Employee Name</dt>
+                <dd>{{ record.case.employee_name }}</dd>
+            </div>
+
+            <div>
+                <dt>Employee ID</dt>
+                <dd>{{ record.case.employee_id }}</dd>
+            </div>
+
+            <div>
+                <dt>Designation</dt>
+                <dd>{{ record.case.designation }}</dd>
+            </div>
+
+            <div>
+                <dt>Employee Department</dt>
+                <dd>{{ record.case.department }}</dd>
+            </div>
+
+            <div>
+                <dt>Line Manager</dt>
+                <dd>{{ record.case.line_manager }}</dd>
+            </div>
+
+            <div>
+                <dt>Last Working Day</dt>
+                <dd>
+                    {{
+                        record.case.last_working_day.strftime(
+                            "%d %B %Y"
+                        )
+                    }}
+                </dd>
+            </div>
+
+            <div>
+                <dt>Created By</dt>
+                <dd>
+                    {{ record.case.created_by or "Not recorded" }}
+                </dd>
+            </div>
+
+            <div>
+                <dt>Created At</dt>
+                <dd>
+                    {{
+                        record.case.created_at.strftime(
+                            "%d %B %Y, %I:%M %p"
+                        )
+                    }}
+                </dd>
+            </div>
+
+            <div>
+                <dt>Last Updated</dt>
+                <dd>
+                    {{
+                        record.case.updated_at.strftime(
+                            "%d %B %Y, %I:%M %p"
+                        )
+                    }}
+                </dd>
+            </div>
+
+            <div>
+                <dt>Closed At</dt>
+                <dd>
+                    {% if record.case.closed_at %}
+                        {{
+                            record.case.closed_at.strftime(
+                                "%d %B %Y, %I:%M %p"
+                            )
+                        }}
+                    {% else %}
+                        Not closed
+                    {% endif %}
+                </dd>
+            </div>
+
+        </dl>
+
+    </section>
+
+
+    <section class="panel">
+
+        <div class="panel__heading">
+            <h2>Current Assignment</h2>
+        </div>
+
+
+        {% if record.current_task %}
+
+            <dl class="detail-grid">
+
+                <div>
+                    <dt>Current Phase</dt>
+                    <dd>
+                        {{ record.current_task.phase.name }}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Responsible Department</dt>
+                    <dd>
+                        {{
+                            record.current_task
+                            .phase.department.name
+                        }}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Assigned Email</dt>
+                    <dd>
+                        {{
+                            record.current_task
+                            .assigned_to_email
+                        }}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Task Status</dt>
+                    <dd>
+                        {{
+                            task_status_labels.get(
+                                record.current_task.status,
+                                record.current_task.status
+                                | replace("_", " ")
+                                | title
+                            )
+                        }}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Assigned At</dt>
+                    <dd>
+                        {{
+                            record.current_task
+                            .assigned_at.strftime(
+                                "%d %B %Y, %I:%M %p"
+                            )
+                        }}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Due At</dt>
+                    <dd>
+                        {{
+                            record.current_task
+                            .due_at.strftime(
+                                "%d %B %Y, %I:%M %p"
+                            )
+                        }}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Opened At</dt>
+                    <dd>
+                        {% if record.current_task.opened_at %}
+                            {{
+                                record.current_task
+                                .opened_at.strftime(
+                                    "%d %B %Y, %I:%M %p"
+                                )
+                            }}
+                        {% else %}
+                            Not opened
+                        {% endif %}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Submitted At</dt>
+                    <dd>
+                        {% if record.current_task.submitted_at %}
+                            {{
+                                record.current_task
+                                .submitted_at.strftime(
+                                    "%d %B %Y, %I:%M %p"
+                                )
+                            }}
+                        {% else %}
+                            Not submitted
+                        {% endif %}
+                    </dd>
+                </div>
+
+            </dl>
+
+        {% else %}
+
+            <p>
+                No current workflow assignment is recorded for
+                this case.
+            </p>
+
+        {% endif %}
+
+    </section>
+
+
+    <section class="panel">
+
+        <div class="panel__heading">
+            <h2>Workflow History</h2>
+        </div>
+
+
+        {% if record.tasks %}
+
+            <div
+                class="case-table-scroll"
+                tabindex="0"
+                role="region"
+                aria-label="Case workflow history"
+            >
+
+                <table class="case-register-table">
+
+                    <thead>
+                        <tr>
+                            <th scope="col">Phase</th>
+                            <th scope="col">Department</th>
+                            <th scope="col">Assigned To</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Assigned</th>
+                            <th scope="col">Opened</th>
+                            <th scope="col">Completed</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for task in record.tasks %}
+
+                            <tr>
+
+                                <td>
+                                    <strong>
+                                        {{ task.phase.name }}
+                                    </strong>
+                                </td>
+
+                                <td>
+                                    {{ task.phase.department.name }}
+                                </td>
+
+                                <td>
+                                    {{ task.assigned_to_email }}
+                                </td>
+
+                                <td>
+                                    {{
+                                        task_status_labels.get(
+                                            task.status,
+                                            task.status
+                                            | replace("_", " ")
+                                            | title
+                                        )
+                                    }}
+                                </td>
+
+                                <td>
+                                    {{
+                                        task.assigned_at.strftime(
+                                            "%d %b %Y, %I:%M %p"
+                                        )
+                                    }}
+                                </td>
+
+                                <td>
+                                    {% if task.opened_at %}
+                                        {{
+                                            task.opened_at.strftime(
+                                                "%d %b %Y, %I:%M %p"
+                                            )
+                                        }}
+                                    {% else %}
+                                        Not opened
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if task.submitted_at %}
+                                        {{
+                                            task.submitted_at.strftime(
+                                                "%d %b %Y, %I:%M %p"
+                                            )
+                                        }}
+                                    {% else %}
+                                        Not completed
+                                    {% endif %}
+                                </td>
+
+                            </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        {% else %}
+
+            <p>
+                No workflow tasks have been created for this case.
+            </p>
+
+        {% endif %}
+
+    </section>
+
+</div>
+
+{% endblock %}
