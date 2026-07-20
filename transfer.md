@@ -1,34 +1,41 @@
-from app.services.case_detail_service import (
-    get_case_detail_record,
+from flask import (
+    current_app,
+    render_template,
 )
 
-service_failures = []
+render_failures = []
 
-for case in OffboardingCase.query.order_by(
-    OffboardingCase.id.asc()
-).all():
-    try:
-        record = get_case_detail_record(
-            case.id
-        )
+with current_app.test_request_context():
+    for case in OffboardingCase.query.order_by(
+        OffboardingCase.id.asc()
+    ).all():
+        try:
+            record = get_case_detail_record(
+                case.id
+            )
 
-        if record is None:
-            service_failures.append(
+            rendered_html = render_template(
+                "cases/detail.html",
+                record=record,
+            )
+
+            if not rendered_html.strip():
+                render_failures.append(
+                    (
+                        case.id,
+                        case.case_number,
+                        "Empty rendered output",
+                    )
+                )
+
+        except Exception as exc:
+            render_failures.append(
                 (
                     case.id,
                     case.case_number,
-                    "Service returned None",
+                    type(exc).__name__,
+                    str(exc),
                 )
             )
 
-    except Exception as exc:
-        service_failures.append(
-            (
-                case.id,
-                case.case_number,
-                type(exc).__name__,
-                str(exc),
-            )
-        )
-
-service_failures
+render_failures
