@@ -44,7 +44,7 @@ from app.services.approval_service import (
 )
 from app.services.task_access_service import (
     consume_task_access_grants,
-    # get_session_grant_for_task,
+    get_session_grant_for_task,
     get_task_access_actor,
     clear_task_access_session,
 )

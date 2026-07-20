@@ -396,7 +396,85 @@ def activate_pending_task_access(
     )
 
     return grant
+def get_session_grant_for_task(
+    task: WorkflowTask,
+    *,
+    allow_consumed_read_only: bool = False,
+) -> Optional[TaskAccessGrant]:
+    """
+    Return the grant authorizing the current browser session.
 
+    The signed Flask session must identify both the supplied task
+    and its active access grant. Revoked, expired, or otherwise
+    invalid grants cannot authorize the request.
+
+    A consumed grant may display a completed task through a
+    read-only GET request in the same browser session.
+    """
+
+    grant_id = session.get(
+        ACTIVE_GRANT_SESSION_KEY
+    )
+
+    task_id = session.get(
+        ACTIVE_TASK_SESSION_KEY
+    )
+
+    if grant_id is None or task_id is None:
+        return None
+
+    try:
+        normalized_grant_id = int(grant_id)
+        normalized_task_id = int(task_id)
+
+    except (TypeError, ValueError):
+        return None
+
+    if normalized_task_id != task.id:
+        return None
+
+    grant = db.session.get(
+        TaskAccessGrant,
+        normalized_grant_id,
+    )
+
+    if grant is None:
+        return None
+
+    if grant.workflow_task_id != task.id:
+        return None
+
+    if grant.revoked_at is not None:
+        return None
+
+    expires_at = normalize_datetime(
+        grant.expires_at
+    )
+
+    if (
+        expires_at is None
+        or expires_at <= utc_now()
+    ):
+        return None
+
+    # A grant must have completed the confirmation POST before
+    # it can authorize an operational task URL.
+    if int(grant.access_count or 0) < 1:
+        return None
+
+    if grant.consumed_at is not None:
+        if (
+            allow_consumed_read_only
+            and request.method == "GET"
+        ):
+            return grant
+
+        return None
+
+    if task.status not in OPEN_TASK_STATUSES:
+        return None
+
+    return grant
 
 def session_owns_task_access_grant(
     grant: Optional[TaskAccessGrant],
