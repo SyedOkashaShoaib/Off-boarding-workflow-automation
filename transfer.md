@@ -1,15 +1,4 @@
-from app.models import OffboardingCase
-
-[
-    {
-        "id": case.id,
-        "case_number": case.case_number,
-        "employee": case.employee_name,
-    }
-    for case in (
-        OffboardingCase.query
-        .order_by(OffboardingCase.id.desc())
-        .limit(10)
-        .all()
-    )
-]
+Select-String `
+    -Path app\routes\case_routes.py `
+    -Pattern "case_created|case_detail|@case_bp" `
+    -Context 2,3
