@@ -14,8 +14,11 @@ from app.forms.auth_forms import (
 from app.services.task_access_service import (
     activate_pending_task_access,
     clear_task_access_session,
-    find_redeemable_grant,
     set_pending_task_access,
+    find_task_access_grant,
+    grant_is_redeemable,
+    session_owns_task_access_grant,
+    
 )
 
 
