@@ -8,6 +8,7 @@ from flask import (
     render_template,
     url_for,
     request,
+    abort,
 )
 
 from flask_login import (
@@ -22,6 +23,11 @@ from app.models import (
     EmailNotification,
     OffboardingCase,
     WorkflowTask,
+    ROLE_NOC_OPERATOR,
+    ROLE_SYSTEM_ADMIN,
+)
+from app.services.case_detail_service import (
+    get_case_detail_record,
 )
 from app.services.notification_service import (
     create_task_assignment_notification,
@@ -210,3 +216,20 @@ def case_created(case_id):
             "console",
         ),
     )
+
+@case_bp.get("/int:case_id") 
+@login_required 
+def case_detail(case_id): 
+    """ Display the complete read-only operational record for one offboarding case.
+        Access is restricted to NOC portal operators and technical system administrators.
+    """
+
+    if not current_user.has_role( ROLE_NOC_OPERATOR, ROLE_SYSTEM_ADMIN,):
+        abort(403)
+
+    record = get_case_detail_record( case_id)
+
+    if record is None:
+        abort(404)
+
+    return render_template( "cases/detail.html", record=record,)
