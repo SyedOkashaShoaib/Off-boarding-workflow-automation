@@ -1,14 +1,19 @@
-{% if record.case.status == "CLOSED" %}
+from app.models import OffboardingCase
 
-    <div class="case-detail-empty">
+case_inventory = [
+    {
+        "id": case.id,
+        "case_number": case.case_number,
+        "status": case.status,
+        "current_phase_id": case.current_phase_id,
+        "task_count": len(case.tasks),
+        "employee": case.employee_name,
+    }
+    for case in (
+        OffboardingCase.query
+        .order_by(OffboardingCase.id.asc())
+        .all()
+    )
+]
 
-        <h3>Workflow Completed</h3>
-
-        <p>
-            This offboarding case is closed and has no active
-            departmental assignment.
-        </p>
-
-    </div>
-
-{% elif record.current_task %}
+case_inventory
