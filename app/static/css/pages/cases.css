@@ -196,7 +196,7 @@
 
 
 .case-register-table {
-    min-width: 1100px;
+    min-width: 1200px;
     margin: 0;
     border: 0;
     border-radius: 0;
@@ -423,4 +423,481 @@
         grid-template-columns: 1fr;
     }
 
+}
+
+/* ============================================================
+   Case detail foundation
+   ============================================================ */
+
+.case-detail-page {
+    display: grid;
+    gap: 18px;
+}
+
+
+.detail-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+    gap: 14px 24px;
+    margin: 0;
+}
+
+
+.detail-grid > div {
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+
+.detail-grid dt {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+
+.detail-grid dd {
+    margin: 4px 0 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+
+@media (max-width: 760px) {
+
+    .detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+/* ============================================================ Case detail records ============================================================ */
+
+.panel__heading p { margin: 3px 0 0; color: var(--text-secondary); font-size: 12px; }
+
+.case-detail-checklists { display: grid; gap: 16px; }
+
+.checklist-record { overflow: hidden; border: 1px solid var(--border-light); border-radius: var(--radius-medium); }
+
+.checklist-record__heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 13px; background: #edf3f7; border-bottom: 1px solid var(--border-light); }
+
+.checklist-record__heading h3 { margin: 0; font-size: 14px; }
+
+.checklist-record__heading p { margin: 2px 0 0; color: var(--text-secondary); font-size: 12px; }
+
+.checklist-record-table { min-width: 950px; }
+
+.checklist-item-section { display: block; margin-bottom: 3px; color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+
+.checklist-result { display: inline-flex; min-height: 23px; align-items: center; padding: 2px 7px; border: 1px solid; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+
+.checklist-result--yes { color: var(--success-text); background: var(--success-background); border-color: var(--success-border); }
+
+.checklist-result--not_applicable { color: #536471; background: #eef2f4; border-color: #aab6be; }
+
+.approval-record { margin-top: 16px; padding: 13px 15px; background: #f5f8fa; border: 1px solid var(--border-light); border-radius: var(--radius-medium); }
+
+.approval-record h3 { margin: 0 0 6px; font-size: 14px; }
+
+.approval-record p { margin: 0; white-space: pre-line; }
+
+.case-detail-empty { padding: 24px 18px; text-align: center; }
+
+.case-detail-empty h3 { margin: 0 0 5px; }
+
+.case-detail-empty p { margin: 0; color: var(--text-secondary); }
+
+.audit-timeline { margin: 0; padding: 0; list-style: none; }
+
+.audit-entry { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 10px; position: relative; padding: 0 0 18px; }
+
+.audit-entry:not(:last-child)::before { position: absolute; top: 12px; bottom: 0; left: 5px; width: 1px; background: var(--border-medium); content: ""; }
+
+.audit-entry__marker { position: relative; z-index: 1; width: 11px; height: 11px; margin-top: 5px; background: #f7fbfd; border: 2px solid #5585a5; border-radius: 50%; }
+
+.audit-entry__content { min-width: 0; padding-bottom: 2px; }
+
+.audit-entry__heading { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+
+.audit-entry__heading time { flex: none; color: var(--text-secondary); font-size: 11px; }
+
+.audit-entry__actor { margin: 3px 0 0; color: var(--text-secondary); font-size: 12px; }
+
+.audit-entry__details { margin: 6px 0 0; white-space: pre-line; overflow-wrap: anywhere; }
+
+@media (max-width: 760px) {
+
+.checklist-record__heading,
+.audit-entry__heading {
+    align-items: flex-start;
+    flex-direction: column;
+}
+
+}
+
+/* ============================================================ Case register navigation ============================================================ */
+
+.case-number-link { display: inline-block; font-weight: 700; text-decoration: none; }
+
+.case-number-link:hover { text-decoration: underline; }
+
+.case-number-link:focus-visible { border-radius: 2px; outline: 2px solid #2e78a7; outline-offset: 2px; }
+
+.case-register-row--clickable { cursor: pointer; }
+
+.case-register-row--clickable:hover td { background: #f1f7fb; }
+
+.case-register-row--clickable:focus-within td { background: #edf5fa; }
+
+.case-register-table__action-column, .case-register-table__action-cell { width: 1%; text-align: right; white-space: nowrap; }
+
+.case-register-view-link { display: inline-flex; min-height: 30px; align-items: center; justify-content: center; padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+
+
+
+/* ============================================================ Case printing controls ============================================================ */
+
+.case-detail-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+
+.case-print-header { display: none; }
+
+/* ============================================================ Printed case record ============================================================ */
+
+@page { size: A4 portrait; margin: 12mm; }
+
+@media print {
+
+html,
+body {
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    color: #000;
+    background: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.35;
+}
+
+
+*,
+*::before,
+*::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+}
+
+
+.skip-link,
+.application-header,
+.application-sidebar,
+.page-context,
+.system-messages,
+.application-status-bar,
+.case-detail-actions,
+.case-detail-audit-section {
+    display: none !important;
+}
+
+
+.application-shell,
+.application-body,
+.application-workspace,
+.application-content {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    color: #000 !important;
+    background: #fff !important;
+    border: 0 !important;
+}
+
+
+.case-print-header {
+    display: block;
+    margin: 0 0 7mm;
+    padding: 0 0 4mm;
+    border-bottom: 1.5px solid #000;
+}
+
+
+.case-print-header__identity {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8mm;
+}
+
+
+.case-print-header__company {
+    display: block;
+    font-size: 15pt;
+    line-height: 1.15;
+}
+
+
+.case-print-header__system {
+    display: block;
+    margin-top: 1mm;
+    font-size: 9pt;
+}
+
+
+.case-print-header__document {
+    font-size: 12pt;
+    font-weight: 700;
+    text-align: right;
+}
+
+
+.case-print-header__metadata {
+    display: grid;
+    grid-template-columns:
+        repeat(4, minmax(0, 1fr));
+    gap: 3mm 6mm;
+    margin: 5mm 0 0;
+}
+
+
+.case-print-header__metadata > div {
+    min-width: 0;
+}
+
+
+.case-print-header__metadata dt {
+    margin: 0;
+    font-size: 7.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+
+.case-print-header__metadata dd {
+    margin: 1mm 0 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+
+.case-detail-page {
+    display: block;
+}
+
+
+.case-detail-page > .panel {
+    margin: 0 0 5mm;
+    overflow: visible;
+    background: #fff !important;
+    border: 1px solid #777;
+    border-radius: 0;
+}
+
+
+.panel__heading {
+    padding: 2.5mm 3mm;
+    color: #000 !important;
+    background: #eee !important;
+    border-bottom: 1px solid #777;
+}
+
+
+.panel__heading h2 {
+    margin: 0;
+    color: #000 !important;
+    font-size: 11pt;
+    break-after: avoid-page;
+    page-break-after: avoid;
+}
+
+
+.panel__heading p {
+    margin: 1mm 0 0;
+    color: #222 !important;
+    font-size: 8pt;
+}
+
+
+.detail-grid {
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+    gap: 0;
+    padding: 2mm 3mm;
+}
+
+
+.detail-grid > div {
+    min-height: 11mm;
+    padding: 2mm 3mm;
+    border-bottom: 1px solid #ccc;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+
+.detail-grid dt {
+    color: #222 !important;
+    font-size: 7.5pt;
+}
+
+
+.detail-grid dd {
+    margin-top: 1mm;
+    color: #000 !important;
+    font-size: 9pt;
+}
+
+
+.case-detail-empty {
+    padding: 4mm;
+}
+
+
+.case-detail-empty h3 {
+    font-size: 10pt;
+}
+
+
+.case-detail-empty p {
+    color: #222 !important;
+}
+
+
+.case-table-scroll {
+    overflow: visible !important;
+}
+
+
+.case-register-table,
+.checklist-record-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+
+.case-register-table thead {
+    display: table-header-group;
+}
+
+
+.case-register-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+
+.case-register-table th,
+.case-register-table td {
+    padding: 1.8mm;
+    color: #000 !important;
+    background: #fff !important;
+    border: 1px solid #999;
+    font-size: 7.5pt;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+
+.case-register-table th {
+    background: #eee !important;
+    font-weight: 700;
+}
+
+
+.checklist-record {
+    margin: 0 3mm 4mm;
+    overflow: visible;
+    border: 1px solid #777;
+    border-radius: 0;
+}
+
+
+.checklist-record__heading {
+    padding: 2mm 3mm;
+    background: #eee !important;
+    border-bottom: 1px solid #777;
+    break-after: avoid-page;
+    page-break-after: avoid;
+}
+
+
+.checklist-record__heading h3 {
+    color: #000 !important;
+    font-size: 10pt;
+}
+
+
+.checklist-record__heading p {
+    color: #222 !important;
+}
+
+
+.register-status,
+.attention-indicator,
+.checklist-result {
+    min-height: 0;
+    padding: 0;
+    color: #000 !important;
+    background: transparent !important;
+    border: 0;
+    border-radius: 0;
+    font-size: inherit;
+    font-weight: 600;
+    white-space: normal;
+}
+
+
+.approval-record {
+    margin: 3mm;
+    padding: 3mm;
+    color: #000 !important;
+    background: #fff !important;
+    border: 1px solid #999;
+    border-radius: 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+
+a,
+a:visited {
+    color: #000 !important;
+    text-decoration: none !important;
+}
+
+
+h2,
+h3,
+thead {
+    break-after: avoid-page;
+    page-break-after: avoid;
+}
+/* Prevent the checklist collection being moved as one large grid. */ .case-detail-checklist-section, .case-detail-checklists, .checklist-record { display: block !important; }
+
+.case-detail-checklist-section, .case-detail-checklists, .checklist-record, .checklist-record-table, .case-table-scroll { break-inside: auto !important; page-break-inside: auto !important; }
+
+.case-detail-checklists { margin: 0; }
+
+.checklist-record { margin: 0 3mm 4mm !important; overflow: visible !important; }
+
+/*
+
+    Keep each department heading with the beginning of its table,
+    but allow the table itself to continue across pages. */ .checklist-record__heading { break-after: avoid-page !important; page-break-after: avoid !important; }
+
+.checklist-record-table { display: table !important; width: 100% !important; }
+
+.checklist-record-table thead { display: table-header-group; }
+
+.checklist-record-table tbody { display: table-row-group; }
+
+/* Individual checklist rows should normally remain intact. */ .checklist-record-table tr { break-inside: avoid !important; page-break-inside: avoid !important; }
 }
