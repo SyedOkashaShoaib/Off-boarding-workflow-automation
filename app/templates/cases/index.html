@@ -2,7 +2,7 @@
 
 
 {% block title %}
-    Cases · Offboarding Workflow System
+    Cases &middot; Offboarding Workflow System
 {% endblock %}
 
 
@@ -24,7 +24,10 @@
     >
         <ol class="breadcrumbs__list">
             <li>Operations</li>
-            <li aria-current="page">Cases</li>
+
+            <li aria-current="page">
+                Cases
+            </li>
         </ol>
     </nav>
 {% endblock %}
@@ -32,6 +35,7 @@
 
 {% block page_header %}
     <div class="page-header">
+
         <div>
             <h1>Cases</h1>
 
@@ -46,6 +50,7 @@
         >
             Create New Case
         </a>
+
     </div>
 {% endblock %}
 
@@ -351,7 +356,8 @@
                             {% endif %}
                         >
                             {{ phase_option.department_name }}
-                            — {{ phase_option.name }}
+                            &mdash;
+                            {{ phase_option.name }}
                         </option>
 
                     {% endfor %}
@@ -487,7 +493,8 @@
                     %}
 
                     <p>
-                        Showing {{ first_record }}–{{ last_record }}
+                        Showing
+                        {{ first_record }}&ndash;{{ last_record }}
                         of {{ page.total }} matching cases.
                     </p>
 
@@ -524,6 +531,15 @@
                             <th scope="col">Due Date</th>
                             <th scope="col">Case Status</th>
                             <th scope="col">Attention</th>
+
+                            <th
+                                scope="col"
+                                class="
+                                    case-register-table__action-column
+                                "
+                            >
+                                Action
+                            </th>
                         </tr>
                     </thead>
 
@@ -532,12 +548,31 @@
 
                         {% for item in page.items %}
 
-                            <tr>
+                            <tr
+                                class="case-register-row"
+                                data-case-url="{{ url_for(
+                                    'cases.case_detail',
+                                    case_id=item.case_id
+                                ) }}"
+                            >
 
                                 <td>
-                                    <strong class="case-number">
+                                    <a
+                                        href="{{ url_for(
+                                            'cases.case_detail',
+                                            case_id=item.case_id
+                                        ) }}"
+                                        class="
+                                            case-number
+                                            case-number-link
+                                        "
+                                        aria-label="
+                                            View case
+                                            {{ item.case_number }}
+                                        "
+                                    >
                                         {{ item.case_number }}
-                                    </strong>
+                                    </a>
 
                                     <span class="table-secondary">
                                         Updated
@@ -638,7 +673,8 @@
 
                                         <span class="table-secondary">
                                             {{
-                                                item.current_task_due_at.strftime(
+                                                item.current_task_due_at
+                                                .strftime(
                                                     "%I:%M %p"
                                                 )
                                             }}
@@ -692,6 +728,30 @@
                                             )
                                         }}
                                     </span>
+                                </td>
+
+
+                                <td
+                                    class="
+                                        case-register-table__action-cell
+                                    "
+                                >
+                                    <a
+                                        href="{{ url_for(
+                                            'cases.case_detail',
+                                            case_id=item.case_id
+                                        ) }}"
+                                        class="
+                                            btn-secondary
+                                            case-register-view-link
+                                        "
+                                        aria-label="
+                                            View details for
+                                            {{ item.case_number }}
+                                        "
+                                    >
+                                        View details
+                                    </a>
                                 </td>
 
                             </tr>
@@ -811,4 +871,15 @@
 
 </div>
 
+{% endblock %}
+
+
+{% block scripts %}
+    <script
+        src="{{ url_for(
+            'static',
+            filename='js/cases.js'
+        ) }}"
+        defer
+    ></script>
 {% endblock %}
