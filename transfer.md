@@ -1,63 +1,55 @@
-"use strict";
+/* ============================================================
+   Case register navigation
+   ============================================================ */
+
+.case-number-link {
+    display: inline-block;
+    font-weight: 700;
+    text-decoration: none;
+}
 
 
-document.addEventListener("DOMContentLoaded", () => {
-    const caseRows = document.querySelectorAll(
-        ".case-register-row[data-case-url]"
-    );
-
-    const interactiveSelector = [
-        "a",
-        "button",
-        "input",
-        "select",
-        "textarea",
-        "label",
-        "summary"
-    ].join(", ");
+.case-number-link:hover {
+    text-decoration: underline;
+}
 
 
-    caseRows.forEach((row) => {
-        const destination = row.dataset.caseUrl;
-
-        if (!destination) {
-            return;
-        }
-
-        row.classList.add(
-            "case-register-row--clickable"
-        );
+.case-number-link:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid #2e78a7;
+    outline-offset: 2px;
+}
 
 
-        row.addEventListener("click", (event) => {
-            /*
-             * Normal links and controls must preserve their own
-             * browser behaviour.
-             */
-            if (
-                event.target.closest(
-                    interactiveSelector
-                )
-            ) {
-                return;
-            }
+.case-register-row--clickable {
+    cursor: pointer;
+}
 
-            /*
-             * Do not navigate when the user is selecting and
-             * copying table text.
-             */
-            const selectedText = window
-                .getSelection()
-                ?.toString()
-                .trim();
 
-            if (selectedText) {
-                return;
-            }
+.case-register-row--clickable:hover td {
+    background: #f1f7fb;
+}
 
-            window.location.assign(
-                destination
-            );
-        });
-    });
-});
+
+.case-register-row--clickable:focus-within td {
+    background: #edf5fa;
+}
+
+
+.case-register-table__action-column,
+.case-register-table__action-cell {
+    width: 1%;
+    text-align: right;
+    white-space: nowrap;
+}
+
+
+.case-register-view-link {
+    display: inline-flex;
+    min-height: 30px;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+}
