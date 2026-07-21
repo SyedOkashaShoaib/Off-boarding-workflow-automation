@@ -18,8 +18,9 @@ from app.services.task_access_service import (
     issue_task_access_grant,
     revoke_grant,
 )
-
-
+TASK_ACCESS_REISSUE_NOTIFICATION_TYPE= (
+    "TASK_ACCESS_REISSUED"
+)
 # ============================================================
 # URL construction
 # ============================================================
@@ -233,22 +234,76 @@ def create_task_assignment_notification(
     )
 
     return notification
+def create_task_access_reissue_notification(
+    *,
+    task: WorkflowTask,
+    requested_by: str,
+    reason: str,
+) -> EmailNotification:
+    """
+    Create a pending notification for a replacement secure link.
 
+    This function does not deliver the notification and does not
+    commit the database transaction.
+    """
+
+    if task.phase.is_final_approval:
+        subject = (
+            "Replacement Final Approval Link — "
+            f"{task.case.case_number}"
+        )
+    else:
+        subject = (
+            "Replacement Offboarding Access Link — "
+            f"{task.case.case_number}"
+        )
+
+    notification = EmailNotification(
+        case=task.case,
+        workflow_task=task,
+        notification_type=(
+            TASK_ACCESS_REISSUE_NOTIFICATION_TYPE
+        ),
+        recipient_email=task.assigned_to_email,
+        subject=subject,
+        status="PENDING",
+    )
+
+    db.session.add(notification)
+
+    db.session.add(
+        AuditLog(
+            case=task.case,
+            action="TASK_ACCESS_REISSUE_REQUESTED",
+            performed_by=requested_by,
+            details=(
+                "A replacement secure access link was "
+                f"requested for task {task.id}. "
+                f"Department: {task.phase.department.name}. "
+                f"Recipient: '{task.assigned_to_email}'. "
+                f"Reason: {reason}"
+            ),
+        )
+    )
+
+    return notification
 
 def deliver_task_assignment_notification(
     notification: EmailNotification,
 ) -> EmailResult:
     """
-    Attempt delivery of a task-assignment notification.
+    Deliver either an initial assignment notification or a
+    replacement secure-link notification.
 
-    NOC receives an authenticated portal URL. MIS, Hardware,
-    and Administration receive secure task-specific links.
+    NOC tasks use portal authentication. MIS, Hardware, and
+    Administration tasks receive task-specific secure links.
 
-    This function updates the current SQLAlchemy session but does
-    not commit. The calling workflow controls the transaction.
+    This function updates the active SQLAlchemy session but does
+    not commit it.
     """
 
     task = notification.workflow_task
+
     access_grant = None
 
     notification.attempted_at = utc_now()
@@ -260,7 +315,40 @@ def deliver_task_assignment_notification(
         task.phase.is_final_approval
     )
 
-    if is_final_approval:
+    is_reissue = (
+        notification.notification_type
+        == TASK_ACCESS_REISSUE_NOTIFICATION_TYPE
+    )
+
+    if is_reissue and is_final_approval:
+        message_heading = (
+            "Replacement Final Approval Link"
+        )
+
+        message_intro = (
+            "A replacement secure link has been issued for "
+            "the final Administration approval task. Any "
+            "previous link and previously authorized browser "
+            "session for this task are no longer valid."
+        )
+
+        link_label = "Open Final Approval"
+
+    elif is_reissue:
+        message_heading = (
+            "Replacement Offboarding Access Link"
+        )
+
+        message_intro = (
+            "A replacement secure link has been issued for "
+            "this offboarding task. Any previous link and "
+            "previously authorized browser session for this "
+            "task are no longer valid."
+        )
+
+        link_label = "Open Assigned Task"
+
+    elif is_final_approval:
         message_heading = (
             "Final Offboarding Approval Required"
         )
@@ -322,6 +410,7 @@ def deliver_task_assignment_notification(
                     "only to this final-approval task. "
                     "Do not forward or share it."
                 )
+
             else:
                 security_notice = (
                     "This secure link is intended only "
@@ -348,15 +437,11 @@ Due At: {due_at_text}
 {link_label}: {task_url}
 
 Security notice: {security_notice}
-""".strip()
+        """.strip()
 
         html_body = f"""
 <!doctype html>
 <html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title>{escape(notification.subject)}</title>
-</head>
 <body>
     <h1>{escape(message_heading)}</h1>
 
@@ -385,15 +470,9 @@ Security notice: {security_notice}
             </tr>
 
             <tr>
-                <th align="left">
-                    Assigned Department
-                </th>
+                <th align="left">Assigned Department</th>
                 <td>
-                    {
-                        escape(
-                            task.phase.department.name
-                        )
-                    }
+                    {escape(task.phase.department.name)}
                 </td>
             </tr>
 
@@ -405,18 +484,18 @@ Security notice: {security_notice}
     </table>
 
     <p>
-        <strong>Security notice:</strong>
-        {escape(security_notice)}
-    </p>
-
-    <p>
-        <a href="{escape(task_url, quote=True)}">
+        <a href="{escape(task_url)}">
             {escape(link_label)}
         </a>
     </p>
+
+    <p>
+        <strong>Security notice:</strong>
+        {escape(security_notice)}
+    </p>
 </body>
 </html>
-""".strip()
+        """.strip()
 
         result = send_notification_email(
             notification=notification,
@@ -451,28 +530,53 @@ Security notice: {security_notice}
         notification.sent_at = utc_now()
         notification.error_message = None
 
-        action = "TASK_NOTIFICATION_SENT"
+        if is_reissue:
+            action = "TASK_ACCESS_REISSUE_SENT"
 
-        details = (
-            "Task notification sent to "
-            f"'{notification.recipient_email}'."
-        )
+            details = (
+                "A replacement secure access link for "
+                f"workflow task {task.id} was sent to "
+                f"'{notification.recipient_email}'."
+            )
+
+        else:
+            action = "TASK_NOTIFICATION_SENT"
+
+            details = (
+                "Task notification sent to "
+                f"'{notification.recipient_email}'."
+            )
 
     else:
         notification.status = "FAILED"
         notification.sent_at = None
-
         if access_grant is not None:
-            revoke_grant(access_grant)
+            revoke_grant(
+                access_grant
+            )
 
-        action = "TASK_NOTIFICATION_FAILED"
+        if is_reissue:
+            action = "TASK_ACCESS_REISSUE_FAILED"
 
-        details = (
-            "Task notification failed for "
-            f"'{notification.recipient_email}'. "
-            "Reason: "
-            f"{result.error_message or 'No reason returned.'}"
-        )
+            details = (
+                "The replacement secure access link for "
+                f"workflow task {task.id} could not be "
+                "delivered to "
+                f"'{notification.recipient_email}'. "
+                "All previously issued links for this task "
+                "remain invalid. Reason: "
+                f"{result.error_message or 'No reason returned.'}"
+            )
+
+        else:
+            action = "TASK_NOTIFICATION_FAILED"
+
+            details = (
+                "Task notification failed for "
+                f"'{notification.recipient_email}'. "
+                "Reason: "
+                f"{result.error_message or 'No reason returned.'}"
+            )
 
     db.session.add(
         AuditLog(
