@@ -1,60 +1,114 @@
-/* Prevent the checklist collection being moved as one large grid. */
-.case-detail-checklist-section,
-.case-detail-checklists,
-.checklist-record {
-    display: block !important;
-}
+"use strict";
 
 
-.case-detail-checklist-section,
-.case-detail-checklists,
-.checklist-record,
-.checklist-record-table,
-.case-table-scroll {
-    break-inside: auto !important;
-    page-break-inside: auto !important;
-}
+document.addEventListener("DOMContentLoaded", () => {
+    const printButton = document.querySelector(
+        "[data-print-case]"
+    );
+
+    const generatedAtElement = document.querySelector(
+        "[data-print-generated-at]"
+    );
+
+    if (!printButton) {
+        return;
+    }
 
 
-.case-detail-checklists {
-    margin: 0;
-}
+    const originalDocumentTitle = document.title;
+
+    const caseNumber = (
+        printButton.dataset.caseNumber
+        || "Offboarding Case"
+    ).trim();
+
+    /*
+     * Stores links temporarily stripped before printing.
+     * A Map makes this safe when preparePrintRecord() is called
+     * once by the button and again by the beforeprint event.
+     */
+    const removedPrintLinks = new Map();
 
 
-.checklist-record {
-    margin: 0 3mm 4mm !important;
-    overflow: visible !important;
-}
+    const removePrintableLinks = () => {
+        const links = document.querySelectorAll(
+            ".application-content a[href]"
+        );
+
+        links.forEach((link) => {
+            if (!removedPrintLinks.has(link)) {
+                removedPrintLinks.set(
+                    link,
+                    link.getAttribute("href")
+                );
+            }
+
+            link.removeAttribute("href");
+        });
+    };
 
 
-/*
- * Keep each department heading with the beginning of its table,
- * but allow the table itself to continue across pages.
- */
-.checklist-record__heading {
-    break-after: avoid-page !important;
-    page-break-after: avoid !important;
-}
+    const restorePrintableLinks = () => {
+        removedPrintLinks.forEach(
+            (href, link) => {
+                if (href !== null) {
+                    link.setAttribute(
+                        "href",
+                        href
+                    );
+                }
+            }
+        );
+
+        removedPrintLinks.clear();
+    };
 
 
-.checklist-record-table {
-    display: table !important;
-    width: 100% !important;
-}
+    const preparePrintRecord = () => {
+        const currentDate = new Date();
+
+        if (generatedAtElement) {
+            generatedAtElement.textContent = (
+                new Intl.DateTimeFormat(
+                    "en-GB",
+                    {
+                        dateStyle: "long",
+                        timeStyle: "short"
+                    }
+                ).format(currentDate)
+            );
+        }
+
+        document.title = (
+            `${caseNumber} - Offboarding Case Record`
+        );
+
+        removePrintableLinks();
+    };
 
 
-.checklist-record-table thead {
-    display: table-header-group;
-}
+    const restorePrintRecord = () => {
+        document.title = originalDocumentTitle;
+        restorePrintableLinks();
+    };
 
 
-.checklist-record-table tbody {
-    display: table-row-group;
-}
+    printButton.addEventListener(
+        "click",
+        () => {
+            preparePrintRecord();
+            window.print();
+        }
+    );
 
 
-/* Individual checklist rows should normally remain intact. */
-.checklist-record-table tr {
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
-}
+    window.addEventListener(
+        "beforeprint",
+        preparePrintRecord
+    );
+
+    window.addEventListener(
+        "afterprint",
+        restorePrintRecord
+    );
+});
