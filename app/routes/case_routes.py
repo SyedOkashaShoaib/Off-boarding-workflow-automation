@@ -393,7 +393,13 @@ def reissue_task_access(case_id):
                 case_id=case.id,
             )
         )
-
+    if request.method=="POST":
+        current_app.logger.warning("Secure link reissue form validation lowkey failed. %s", form.errors,)
+        flash(
+            (
+                "The replacement link was not sent becuase"
+             "the confirmation form contains validation errors"), "error",)
+            
     return render_template(
         "cases/reissue_access.html",
         case=case,
