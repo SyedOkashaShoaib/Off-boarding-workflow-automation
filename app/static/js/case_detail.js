@@ -18,6 +18,47 @@ const caseNumber = (
     || "Offboarding Case"
 ).trim();
 
+/*
+ * Stores links temporarily stripped before printing.
+ * A Map makes this safe when preparePrintRecord() is called
+ * once by the button and again by the beforeprint event.
+ */
+const removedPrintLinks = new Map();
+
+
+const removePrintableLinks = () => {
+    const links = document.querySelectorAll(
+        ".application-content a[href]"
+    );
+
+    links.forEach((link) => {
+        if (!removedPrintLinks.has(link)) {
+            removedPrintLinks.set(
+                link,
+                link.getAttribute("href")
+            );
+        }
+
+        link.removeAttribute("href");
+    });
+};
+
+
+const restorePrintableLinks = () => {
+    removedPrintLinks.forEach(
+        (href, link) => {
+            if (href !== null) {
+                link.setAttribute(
+                    "href",
+                    href
+                );
+            }
+        }
+    );
+
+    removedPrintLinks.clear();
+};
+
 
 const preparePrintRecord = () => {
     const currentDate = new Date();
@@ -34,31 +75,29 @@ const preparePrintRecord = () => {
         );
     }
 
-    /*
-     * Browsers commonly use the document title as the
-     * suggested filename when saving the print output as PDF.
-     */
     document.title = (
         `${caseNumber} - Offboarding Case Record`
     );
+
+    removePrintableLinks();
 };
 
 
-const restoreDocumentTitle = () => {
+const restorePrintRecord = () => {
     document.title = originalDocumentTitle;
+    restorePrintableLinks();
 };
 
 
-printButton.addEventListener("click", () => {
-    preparePrintRecord();
-    window.print();
-});
+printButton.addEventListener(
+    "click",
+    () => {
+        preparePrintRecord();
+        window.print();
+    }
+);
 
 
-/*
- * This also prepares the record when the user invokes printing
- * through Ctrl+P or the browser menu instead of the page button.
- */
 window.addEventListener(
     "beforeprint",
     preparePrintRecord
@@ -66,7 +105,7 @@ window.addEventListener(
 
 window.addEventListener(
     "afterprint",
-    restoreDocumentTitle
+    restorePrintRecord
 );
 
 });
