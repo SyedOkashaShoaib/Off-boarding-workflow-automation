@@ -1,38 +1,68 @@
-{% block page_header %}
+<section
+    class="case-print-header"
+    aria-label="Printed case record heading"
+>
 
-    <div class="page-header">
+    <div class="case-print-header__identity">
 
         <div>
-            <h1>{{ record.case.case_number }}</h1>
+            <strong class="case-print-header__company">
+                Barrett Hodgson
+            </strong>
 
-            <p>
-                {{ record.case.employee_name }}
-                &middot; Employee offboarding case
-            </p>
+            <span class="case-print-header__system">
+                Offboarding Workflow System
+            </span>
         </div>
 
 
-        <div class="case-detail-actions">
-
-            <button
-                type="button"
-                class="btn-primary"
-                data-print-case
-                data-case-number="{{ record.case.case_number }}"
-            >
-                Print Case
-            </button>
-
-
-            <a
-                href="{{ url_for('cases.list_cases') }}"
-                class="btn-secondary"
-            >
-                Back to Cases
-            </a>
-
+        <div class="case-print-header__document">
+            Employee Offboarding Case Record
         </div>
 
     </div>
 
-{% endblock %}
+
+    <dl class="case-print-header__metadata">
+
+        <div>
+            <dt>Case Number</dt>
+
+            <dd>
+                {{ record.case.case_number }}
+            </dd>
+        </div>
+
+
+        <div>
+            <dt>Employee</dt>
+
+            <dd>
+                {{ record.case.employee_name }}
+            </dd>
+        </div>
+
+
+        <div>
+            <dt>Employee ID</dt>
+
+            <dd>
+                {{ record.case.employee_id }}
+            </dd>
+        </div>
+
+
+        <div>
+            <dt>Record Printed</dt>
+
+            <dd data-print-generated-at>
+                Prepared for printing
+            </dd>
+        </div>
+
+    </dl>
+
+</section>
+
+
+<div class="case-detail-page">
