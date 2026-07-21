@@ -1,127 +1,237 @@
-@case_bp.route(
-    "/<int:case_id>/reissue-access",
-    methods=["GET", "POST"],
-)
-@login_required
-def reissue_task_access(case_id):
-    """
-    Confirm and execute replacement of the secure access link for
-    the case's current eligible workflow task.
-    """
+{% extends "base.html" %}
 
-    require_case_operations_access()
 
-    case = OffboardingCase.query.get_or_404(
-        case_id
-    )
+{% block title %}
+    Reissue Secure Link &middot;
+    {{ case.case_number }}
+{% endblock %}
 
-    try:
-        task = get_reissuable_current_task(
-            case
-        )
 
-    except TaskAccessReissueError as exc:
-        flash(
-            str(exc),
-            "warning",
-        )
+{% block head %}
+    <link
+        rel="stylesheet"
+        href="{{ url_for(
+            'static',
+            filename='css/pages/cases.css'
+        ) }}"
+    >
+{% endblock %}
 
-        return redirect(
-            url_for(
-                "cases.case_detail",
-                case_id=case.id,
-            )
-        )
 
-    form = ReissueTaskAccessForm()
+{% block breadcrumbs %}
+    <nav
+        class="breadcrumbs"
+        aria-label="Breadcrumb"
+    >
+        <ol class="breadcrumbs__list">
 
-    if form.validate_on_submit():
-        try:
-            result = reissue_current_task_access(
-                case=case,
-                requested_by=current_user.email,
-                reason=form.reason.data,
-            )
+            <li>Operations</li>
 
-            db.session.commit()
+            <li>
+                <a href="{{ url_for('cases.list_cases') }}">
+                    Cases
+                </a>
+            </li>
 
-        except TaskAccessReissueError as exc:
-            db.session.rollback()
+            <li>
+                <a
+                    href="{{ url_for(
+                        'cases.case_detail',
+                        case_id=case.id
+                    ) }}"
+                >
+                    {{ case.case_number }}
+                </a>
+            </li>
 
-            flash(
-                str(exc),
-                "error",
-            )
+            <li aria-current="page">
+                Reissue Secure Link
+            </li>
 
-            return redirect(
-                url_for(
-                    "cases.case_detail",
-                    case_id=case.id,
-                )
-            )
+        </ol>
+    </nav>
+{% endblock %}
 
-        except SQLAlchemyError:
-            db.session.rollback()
 
-            current_app.logger.exception(
-                (
-                    "Database error while reissuing secure "
-                    "task access for case %s."
-                ),
-                case.id,
-            )
+{% block page_header %}
+    <div class="page-header">
 
-            flash(
-                (
-                    "The replacement-link request could not "
-                    "be saved. No reliable reissue result "
-                    "was recorded."
-                ),
-                "error",
-            )
+        <div>
+            <h1>Reissue Secure Link</h1>
 
-            return redirect(
-                url_for(
-                    "cases.case_detail",
-                    case_id=case.id,
-                )
-            )
+            <p>
+                {{ case.case_number }}
+                &middot;
+                {{ task.phase.department.name }}
+            </p>
+        </div>
 
-        if result.delivery_result.success:
-            flash(
-                (
-                    "A replacement secure link for "
-                    f"{result.task.phase.department.name} "
-                    "was sent to "
-                    f"{result.notification.recipient_email}. "
-                    "All previous links and browser sessions "
-                    "for this task are now invalid."
-                ),
-                "success",
-            )
+        <a
+            href="{{ url_for(
+                'cases.case_detail',
+                case_id=case.id
+            ) }}"
+            class="btn-secondary"
+        >
+            Cancel
+        </a>
 
-        else:
-            flash(
-                (
-                    "All previous links for the current task "
-                    "were invalidated, but the replacement "
-                    "notification could not be delivered. "
-                    "Check the recipient or email configuration "
-                    "and reissue the link again."
-                ),
-                "warning",
-            )
+    </div>
+{% endblock %}
 
-        return redirect(
-            url_for(
-                "cases.case_detail",
-                case_id=case.id,
-            )
-        )
 
-    return render_template(
-        "cases/reissue_access.html",
-        case=case,
-        task=task,
-        form=form,
-    )
+{% block content %}
+
+<div class="case-action-page">
+
+    <section class="panel">
+
+        <div class="panel__heading">
+            <h2>Confirm Replacement Access</h2>
+
+            <p>
+                Review the assignment before issuing a new link.
+            </p>
+        </div>
+
+
+        <div class="reissue-warning">
+
+            <h3>Previous access will be invalidated</h3>
+
+            <p>
+                Reissuing this link will revoke all previously issued
+                secure links and invalidate any browser session that
+                is currently authorised for this task.
+            </p>
+
+        </div>
+
+
+        <dl class="detail-grid case-action-summary">
+
+            <div>
+                <dt>Case Number</dt>
+                <dd>{{ case.case_number }}</dd>
+            </div>
+
+            <div>
+                <dt>Employee</dt>
+                <dd>{{ case.employee_name }}</dd>
+            </div>
+
+            <div>
+                <dt>Current Phase</dt>
+                <dd>{{ task.phase.name }}</dd>
+            </div>
+
+            <div>
+                <dt>Department</dt>
+                <dd>{{ task.phase.department.name }}</dd>
+            </div>
+
+            <div>
+                <dt>Recipient</dt>
+                <dd>{{ task.assigned_to_email }}</dd>
+            </div>
+
+            <div>
+                <dt>Task Status</dt>
+                <dd>
+                    {{
+                        task.status
+                        | replace("_", " ")
+                        | title
+                    }}
+                </dd>
+            </div>
+
+        </dl>
+
+
+        <form
+            method="post"
+            action="{{ url_for(
+                'cases.reissue_task_access',
+                case_id=case.id
+            ) }}"
+            class="case-action-form"
+            novalidate
+        >
+
+            {{ form.hidden_tag() }}
+
+
+            <div class="case-action-field">
+
+                {{ form.reason.label(
+                    class_="case-action-field__label"
+                ) }}
+
+                <p
+                    id="reissue-reason-help"
+                    class="case-action-field__help"
+                >
+                    Record the operational reason for replacing the
+                    existing link. This reason will be retained in
+                    the case audit trail.
+                </p>
+
+                {{
+                    form.reason(
+                        class_="case-action-field__textarea",
+                        rows="5",
+                        maxlength="500",
+                        placeholder=(
+                            "Example: The assigned department "
+                            "lost access to the original secure link."
+                        ),
+                        aria_describedby=(
+                            "reissue-reason-help"
+                        )
+                    )
+                }}
+
+                {% if form.reason.errors %}
+
+                    <ul
+                        class="case-action-field__errors"
+                        aria-live="polite"
+                    >
+                        {% for error in form.reason.errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+
+                {% endif %}
+
+            </div>
+
+
+            <div class="case-action-form__actions">
+
+                <a
+                    href="{{ url_for(
+                        'cases.case_detail',
+                        case_id=case.id
+                    ) }}"
+                    class="btn-secondary"
+                >
+                    Cancel
+                </a>
+
+                {{
+                    form.submit(
+                        class_="btn-primary"
+                    )
+                }}
+
+            </div>
+
+        </form>
+
+    </section>
+
+</div>
+
+{% endblock %}
