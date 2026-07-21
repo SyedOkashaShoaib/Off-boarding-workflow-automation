@@ -830,4 +830,56 @@
                         {% else %}
 
                             <span
-                               
+                                class="btn-secondary"
+                                aria-disabled="true"
+                            >
+                                Next
+                            </span>
+
+                        {% endif %}
+
+                    </div>
+
+                </nav>
+
+            {% endif %}
+
+
+        {% else %}
+
+            <div class="case-register-empty">
+
+                <h3>No Matching Cases</h3>
+
+                <p>
+                    Adjust the search criteria or clear the selected
+                    filters to view additional cases.
+                </p>
+
+                <a
+                    href="{{ url_for('cases.list_cases') }}"
+                    class="btn-secondary"
+                >
+                    Clear Filters
+                </a>
+
+            </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+    <script
+        src="{{ url_for(
+            'static',
+            filename='js/cases.js'
+        ) }}"
+        defer
+    ></script>
+{% endblock %}
