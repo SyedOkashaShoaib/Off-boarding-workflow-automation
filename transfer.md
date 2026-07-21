@@ -1,112 +1,56 @@
-from typing import Any, Dict, FrozenSet
-
-
-CHECKLIST_RESPONSE_YES = "YES"
-
-CHECKLIST_RESPONSE_NO = "NO"
-
-CHECKLIST_RESPONSE_NOT_APPLICABLE = (
-    "NOT_APPLICABLE"
-)
-
-
-CHECKLIST_RESPONSE_STATUSES: FrozenSet[str] = frozenset(
-    {
-        CHECKLIST_RESPONSE_YES,
-        CHECKLIST_RESPONSE_NO,
-        CHECKLIST_RESPONSE_NOT_APPLICABLE,
-    }
-)
-
-
-CHECKLIST_REASON_REQUIRED_STATUSES: FrozenSet[str] = (
-    frozenset(
-        {
-            CHECKLIST_RESPONSE_NO,
-            CHECKLIST_RESPONSE_NOT_APPLICABLE,
-        }
-    )
-)
-
-
-CHECKLIST_RESPONSE_LABELS: Dict[str, str] = {
-    CHECKLIST_RESPONSE_YES: "Yes",
-    CHECKLIST_RESPONSE_NO: "No",
-    CHECKLIST_RESPONSE_NOT_APPLICABLE: (
-        "Not applicable"
-    ),
-}
-
-
-MAX_CHECKLIST_REASON_LENGTH = 2000
-
-
-def normalize_checklist_response(
-    value: Any,
-) -> str:
+class DepartmentEmployee(db.Model):
     """
-    Return the canonical checklist-response value used by the
-    database and validation services.
+    Employee available for selection as the person responsible
+    for an individual departmental checklist item.
     """
 
-    return str(
-        value or ""
-    ).strip().upper()
+    __tablename__ = "department_employees"
 
-
-def is_supported_checklist_response(
-    response_status: Any,
-) -> bool:
-    """
-    Return whether the supplied value is an approved checklist
-    response.
-    """
-
-    normalized_status = normalize_checklist_response(
-        response_status
+    __table_args__ = (
+        db.Index(
+            "ix_department_employees_department_active",
+            "department_id",
+            "is_active",
+        ),
     )
 
-    return (
-        normalized_status
-        in CHECKLIST_RESPONSE_STATUSES
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
     )
 
-
-def checklist_response_requires_reason(
-    response_status: Any,
-) -> bool:
-    """
-    Return whether an explanation is mandatory for this response.
-    """
-
-    normalized_status = normalize_checklist_response(
-        response_status
+    department_id = db.Column(
+        db.Integer,
+        db.ForeignKey("departments.id"),
+        nullable=False,
     )
 
-    return (
-        normalized_status
-        in CHECKLIST_REASON_REQUIRED_STATUSES
+    employee_code = db.Column(
+        db.String(50),
+        unique=True,
+        nullable=False,
+        index=True,
     )
 
-
-def get_checklist_response_label(
-    response_status: Any,
-) -> str:
-    """
-    Return the user-facing label for a stored checklist response.
-    """
-
-    normalized_status = normalize_checklist_response(
-        response_status
+    full_name = db.Column(
+        db.String(150),
+        nullable=False,
     )
 
-    if not normalized_status:
-        return "Not recorded"
-
-    return CHECKLIST_RESPONSE_LABELS.get(
-        normalized_status,
-        normalized_status.replace(
-            "_",
-            " ",
-        ).title(),
+    is_active = db.Column(
+        db.Boolean,
+        default=True,
+        nullable=False,
     )
+
+    department = db.relationship(
+        "Department",
+        back_populates="employees",
+    )
+
+    def __repr__(self):
+        return (
+            f"<DepartmentEmployee "
+            f"{self.employee_code} "
+            f"{self.full_name}>"
+        )
