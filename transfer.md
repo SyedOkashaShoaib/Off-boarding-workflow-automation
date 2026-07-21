@@ -1,35 +1,48 @@
-@case_bp.get("/<int:case_id>")
+@case_bp.route(
+    "/<int:case_id>/reissue-access",
+    methods=["GET", "POST"],
+)
 @login_required
-def case_detail(case_id):
+def reissue_task_access(case_id):
     """
-    Display the complete read-only operational record for one
-    offboarding case.
+    Confirm and execute replacement of the secure access link for
+    the case's current eligible workflow task.
     """
 
     require_case_operations_access()
 
-    record = get_case_detail_record(
+    case = OffboardingCase.query.get_or_404(
         case_id
     )
 
-    if record is None:
-        abort(404)
-
-    reissue_task = None
-
     try:
-        reissue_task = (
-            get_reissuable_current_task(
-                record.case
+        task = get_reissuable_current_task(
+            case
+        )
+
+    except TaskAccessReissueError as exc:
+        flash(
+            str(exc),
+            "warning",
+        )
+
+        return redirect(
+            url_for(
+                "cases.case_detail",
+                case_id=case.id,
             )
         )
 
-    except TaskAccessReissueError:
-        # An ineligible case remains viewable without a button.
-        pass
+    form = ReissueTaskAccessForm()
 
-    return render_template(
-        "cases/detail.html",
-        record=record,
-        reissue_task=reissue_task,
-    )
+    if form.validate_on_submit():
+        try:
+            result = reissue_current_task_access(
+                case=case,
+                requested_by=current_user.email,
+                reason=form.reason.data,
+            )
+
+            /*
+             * Do not copy this comment syntax into Python.
+             */
