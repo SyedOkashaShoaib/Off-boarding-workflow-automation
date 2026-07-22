@@ -1,80 +1,107 @@
-NAMING_CONVENTION = {
-    "ix": "ix_%(table_name)s_%(column_0_name)s",
-    "uq": "uq_%(table_name)s_%(column_0_name)s",
-    "ck": "ck_%(table_name)s_%(column_0_name)s",
-    "fk": (
-        "fk_%(table_name)s_%(column_0_name)s_"
-        "%(referred_table_name)s"
-    ),
-    "pk": "pk_%(table_name)s",
-}
+class ChecklistResponse(db.Model):
+    """
+    Recorded response for one checklist item within one workflow
+    task.
+    """
 
+    __tablename__ = "checklist_responses"
 
-def upgrade():
-    with op.batch_alter_table(
-        "checklist_responses",
-        schema=None,
-        naming_convention=NAMING_CONVENTION,
-    ) as batch_op:
-        batch_op.alter_column(
-            "not_applicable_reason",
-            new_column_name="response_reason",
-            existing_type=sa.Text(),
-            existing_nullable=True,
-        )
+    __table_args__ = (
+        db.UniqueConstraint(
+            "workflow_task_id",
+            "checklist_item_id",
+            name="uq_task_checklist_item_response",
+        ),
+    )
 
-        batch_op.add_column(
-            sa.Column(
-                "responsible_employee_id",
-                sa.Integer(),
-                nullable=False,
-            )
-        )
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
 
-        batch_op.create_index(
-            "ix_checklist_responses_responsible_employee_id",
-            ["responsible_employee_id"],
-            unique=False,
-        )
+    case_id = db.Column(
+        db.Integer,
+        db.ForeignKey("offboarding_cases.id"),
+        nullable=False,
+    )
 
-        batch_op.create_foreign_key(
-            (
-                "fk_checklist_responses_"
-                "responsible_employee_id_"
-                "department_employees"
-            ),
-            "department_employees",
-            ["responsible_employee_id"],
-            ["id"],
-        )
+    workflow_task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("workflow_tasks.id"),
+        nullable=False,
+    )
 
+    checklist_item_id = db.Column(
+        db.Integer,
+        db.ForeignKey("checklist_items.id"),
+        nullable=False,
+    )
 
-def downgrade():
-    with op.batch_alter_table(
-        "checklist_responses",
-        schema=None,
-        naming_convention=NAMING_CONVENTION,
-    ) as batch_op:
-        batch_op.drop_constraint(
-            (
-                "fk_checklist_responses_"
-                "responsible_employee_id_"
-                "department_employees"
-            ),
-            type_="foreignkey",
-        )
+    responsible_employee_id = db.Column(
+        db.Integer,
+        db.ForeignKey("department_employees.id"),
+        nullable=False,
+        index=True,
+    )
 
-        batch_op.drop_index(
-            "ix_checklist_responses_responsible_employee_id"
-        )
+    response_status = db.Column(
+        db.String(50),
+        nullable=False,
+    )
 
-        batch_op.drop_column(
-            "responsible_employee_id"
-        )
+    response_reason = db.Column(
+        db.Text,
+        nullable=True,
+    )
 
-        batch_op.alter_column(
-            "response_reason",
-            new_column_name="not_applicable_reason",
-            existing_type=sa.Text(),
-            existing_nullable=True,
+    responded_by = db.Column(
+        db.String(150),
+        nullable=True,
+    )
+
+    responded_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+    workflow_task = db.relationship(
+        "WorkflowTask",
+        back_populates="responses",
+    )
+
+    checklist_item = db.relationship(
+        "ChecklistItem",
+        back_populates="responses",
+    )
+
+    responsible_employee = db.relationship(
+        "DepartmentEmployee",
+        back_populates="checklist_responses",
+    )
+
+    @property
+    def not_applicable_reason(self):
+        """
+        Temporary compatibility alias for checklist code that still
+        refers to the previous field name.
+
+        Remove this property after the checklist service and display
+        code have been updated to use response_reason.
+        """
+
+        return self.response_reason
+
+    @not_applicable_reason.setter
+    def not_applicable_reason(
+        self,
+        value,
+    ):
+        self.response_reason = value
+
+    def __repr__(self):
+        return (
+            f"<ChecklistResponse "
+            f"Task={self.workflow_task_id} "
+            f"Item={self.checklist_item_id}>"
         )
