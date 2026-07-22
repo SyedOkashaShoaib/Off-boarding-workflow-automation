@@ -69,19 +69,19 @@ def seed_departments() -> None:
     departments_data = [
         {
             "name": "NOC",
-            "email": "internee@company.com",
+            "email": "intern@BarrettHodsgon.com",
         },
         {
             "name": "MIS",
-            "email": "internee@company.com",
+            "email": "intern@BarrettHodsgon.com",
         },
         {
             "name": "Hardware",
-            "email": "internee@company.com",
+            "email": "intern@BarrettHodsgon.com",
         },
         {
             "name": "Admin",
-            "email": "internee@company.com",
+            "email": "intern@BarrettHodsgon.com",
         },
     ]
 
