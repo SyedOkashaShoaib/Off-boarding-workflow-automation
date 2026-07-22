@@ -1,103 +1,80 @@
-def seed_department_employees() -> int:
+class ChecklistResponse(db.Model):
     """
-    Insert or update prototype department employees.
-
-    Existing employees are matched by employee code so the command
-    remains safe to run repeatedly.
+    Recorded response for one checklist item within one workflow
+    task.
     """
 
-    departments = {
-        department.name: department
-        for department in Department.query.all()
-    }
+    __tablename__ = "checklist_responses"
 
-    employees_data = [
-        {
-            "employee_code": "NOC-001",
-            "full_name": "NOC Officer 1",
-            "department": "NOC",
-        },
-        {
-            "employee_code": "NOC-002",
-            "full_name": "NOC Officer 2",
-            "department": "NOC",
-        },
-        {
-            "employee_code": "MIS-001",
-            "full_name": "MIS Officer 1",
-            "department": "MIS",
-        },
-        {
-            "employee_code": "MIS-002",
-            "full_name": "MIS Officer 2",
-            "department": "MIS",
-        },
-        {
-            "employee_code": "HARDWARE-001",
-            "full_name": "Hardware Officer 1",
-            "department": "Hardware",
-        },
-        {
-            "employee_code": "HARDWARE-002",
-            "full_name": "Hardware Officer 2",
-            "department": "Hardware",
-        },
-        {
-            "employee_code": "ADMIN-001",
-            "full_name": "Administration Officer 1",
-            "department": "Admin",
-        },
-        {
-            "employee_code": "ADMIN-002",
-            "full_name": "Administration Officer 2",
-            "department": "Admin",
-        },
-    ]
+    __table_args__ = (
+        db.UniqueConstraint(
+            "workflow_task_id",
+            "checklist_item_id",
+            name="uq_task_checklist_item_response",
+        ),
+    )
 
-    created_count = 0
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
 
-    for employee_data in employees_data:
-        department = departments.get(
-            employee_data["department"]
-        )
+    case_id = db.Column(
+        db.Integer,
+        db.ForeignKey("offboarding_cases.id"),
+        nullable=False,
+    )
 
-        if department is None:
-            raise ValueError(
-                "Required department not found: "
-                f"{employee_data['department']}"
-            )
+    workflow_task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("workflow_tasks.id"),
+        nullable=False,
+    )
 
-        employee = (
-            DepartmentEmployee.query
-            .filter_by(
-                employee_code=(
-                    employee_data["employee_code"]
-                )
-            )
-            .first()
-        )
+    checklist_item_id = db.Column(
+        db.Integer,
+        db.ForeignKey("checklist_items.id"),
+        nullable=False,
+    )
 
-        if employee is None:
-            employee = DepartmentEmployee(
-                employee_code=(
-                    employee_data["employee_code"]
-                ),
-                full_name=(
-                    employee_data["full_name"]
-                ),
-                department=department,
-                is_active=True,
-            )
+    responsible_employee_id = db.Column(
+        db.Integer,
+        db.ForeignKey("department_employees.id"),
+        nullable=False,
+        index=True,
+    )
 
-            db.session.add(employee)
-            created_count += 1
+    response_status = db.Column(
+        db.String(50),
+        nullable=False,
+    )
 
-        else:
-            employee.full_name = (
-                employee_data["full_name"]
-            )
+    response_reason = db.Column(
+        db.Text,
+        nullable=True,
+    )
 
-            employee.department = department
-            employee.is_active = True
+    responded_by = db.Column(
+        db.String(150),
+        nullable=True,
+    )
 
-    return created_count
+    responded_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+    workflow_task = db.relationship(
+        "WorkflowTask",
+        back_populates="responses",
+    )
+
+    checklist_item = db.relationship(
+        "ChecklistItem",
+        back_populates="responses",
+    )
+
+    responsible_employee = db.relationship(
+        "DepartmentEmployee",
+       
