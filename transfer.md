@@ -1,28 +1,22 @@
-def render_task_detail(
-    *,
+def build_saved_response_values(
     task: WorkflowTask,
-    form: WorkflowChecklistForm,
-    checklist_sections: dict,
-    department_employees: list,
-    submitted_values: dict,
-    validation_errors: dict,
-):
+) -> dict:
     """
-    Render the departmental task page with complete checklist
-    context.
-
-    Every render path must use this helper so submitted selections
-    survive validation failures.
+    Convert saved ChecklistResponse records into values displayed
+    by the task template.
     """
 
-    return render_template(
-        "workflow/task_detail.html",
-        task=task,
-        form=form,
-        checklist_sections=checklist_sections,
-        department_employees=(
-            department_employees
-        ),
-        submitted_values=submitted_values,
-        validation_errors=validation_errors,
-    )
+    return {
+        response.checklist_item_id: {
+            "response_status": (
+                response.response_status
+            ),
+            "reason": (
+                response.response_reason or ""
+            ),
+            "responsible_employee_id": (
+                response.responsible_employee_id
+            ),
+        }
+        for response in task.responses
+    }
