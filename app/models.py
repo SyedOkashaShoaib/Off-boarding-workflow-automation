@@ -69,7 +69,10 @@ class DepartmentEmployee(db.Model):
         "Department",
         back_populates="employees",
     )
-
+    checklist_responses= db.relationship(
+        "ChecklistResponse",
+        back_populates='responsible_employee',
+    )
     def __repr__(self):
         return (
             f"<DepartmentEmployee "
@@ -633,18 +636,34 @@ class ChecklistResponse(db.Model):
 
     responsible_employee = db.relationship(
         "DepartmentEmployee",
-       back_populates="responses",
+        back_populates="checklist_responses",
     )
+
     @property
     def not_applicable_reason(self):
+        """
+        Temporary compatibility alias for checklist code that still
+        refers to the previous field name.
+
+        Remove this property after the checklist service and display
+        code have been updated to use response_reason.
+        """
+
         return self.response_reason
-    
+
     @not_applicable_reason.setter
-    def not_applicable_reason(self, value):
-        self.response_reason=value
+    def not_applicable_reason(
+        self,
+        value,
+    ):
+        self.response_reason = value
 
     def __repr__(self):
-        return f"<ChecklistResponse Task={self.workflow_task_id} Item={self.checklist_item_id}>"
+        return (
+            f"<ChecklistResponse "
+            f"Task={self.workflow_task_id} "
+            f"Item={self.checklist_item_id}>"
+        )
 
 
 class AuditLog(db.Model):
