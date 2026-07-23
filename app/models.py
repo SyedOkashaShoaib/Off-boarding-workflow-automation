@@ -20,6 +20,66 @@ PORTAL_ROLES = (
     ROLE_FINAL_APPROVER,
     ROLE_SYSTEM_ADMIN,
 )
+class DepartmentEmployee(db.Model):
+    """
+    Employee available for selection as the person responsible
+    for an individual departmental checklist item.
+    """
+
+    __tablename__ = "department_employees"
+
+    __table_args__ = (
+        db.Index(
+            "ix_department_employees_department_active",
+            "department_id",
+            "is_active",
+        ),
+    )
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
+
+    department_id = db.Column(
+        db.Integer,
+        db.ForeignKey("departments.id"),
+        nullable=False,
+    )
+
+    employee_code = db.Column(
+        db.String(50),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    full_name = db.Column(
+        db.String(150),
+        nullable=False,
+    )
+
+    is_active = db.Column(
+        db.Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    department = db.relationship(
+        "Department",
+        back_populates="employees",
+    )
+    checklist_responses= db.relationship(
+        "ChecklistResponse",
+        back_populates='responsible_employee',
+    )
+    def __repr__(self):
+        return (
+            f"<DepartmentEmployee "
+            f"{self.employee_code} "
+            f"{self.full_name}>"
+        )
+
 class User(UserMixin, db.Model):
     """
     Authenticated portal user.
@@ -204,6 +264,8 @@ class Department(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     phases = db.relationship("WorkflowPhase", back_populates="department")
+    employees = db.relationship("DepartmentEmployee", back_populates='department', 
+                                order_by='DepartmentEmployee.full_name', )
 
     def __repr__(self):
         return f"<Department {self.name}>"
@@ -496,52 +558,112 @@ class TaskAccessGrant(db.Model):
         )
 
 class ChecklistResponse(db.Model):
+    """
+    Recorded response for one checklist item within one workflow
+    task.
+    """
+
     __tablename__ = "checklist_responses"
-
-    id = db.Column(db.Integer, primary_key=True)
-
-    case_id = db.Column(
-        db.Integer,
-        db.ForeignKey("offboarding_cases.id"),
-        nullable=False
-    )
-
-    workflow_task_id = db.Column(
-        db.Integer,
-        db.ForeignKey("workflow_tasks.id"),
-        nullable=False
-    )
-
-    checklist_item_id = db.Column(
-        db.Integer,
-        db.ForeignKey("checklist_items.id"),
-        nullable=False
-    )
-
-    response_status = db.Column(db.String(50), nullable=False)
-    not_applicable_reason = db.Column(db.Text, nullable=True)
-
-    responded_by = db.Column(db.String(150), nullable=True)
-
-    responded_at = db.Column(
-        db.DateTime(timezone=True),
-        default=utc_now,
-        nullable=False
-    )
-
-    workflow_task = db.relationship("WorkflowTask", back_populates="responses")
-    checklist_item = db.relationship("ChecklistItem", back_populates="responses")
 
     __table_args__ = (
         db.UniqueConstraint(
             "workflow_task_id",
             "checklist_item_id",
-            name="uq_task_checklist_item_response"
+            name="uq_task_checklist_item_response",
         ),
     )
 
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
+
+    case_id = db.Column(
+        db.Integer,
+        db.ForeignKey("offboarding_cases.id"),
+        nullable=False,
+    )
+
+    workflow_task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("workflow_tasks.id"),
+        nullable=False,
+    )
+
+    checklist_item_id = db.Column(
+        db.Integer,
+        db.ForeignKey("checklist_items.id"),
+        nullable=False,
+    )
+
+    responsible_employee_id = db.Column(
+        db.Integer,
+        db.ForeignKey("department_employees.id"),
+        nullable=False,
+        index=True,
+    )
+
+    response_status = db.Column(
+        db.String(50),
+        nullable=False,
+    )
+
+    response_reason = db.Column(
+        db.Text,
+        nullable=True,
+    )
+
+    responded_by = db.Column(
+        db.String(150),
+        nullable=True,
+    )
+
+    responded_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+    workflow_task = db.relationship(
+        "WorkflowTask",
+        back_populates="responses",
+    )
+
+    checklist_item = db.relationship(
+        "ChecklistItem",
+        back_populates="responses",
+    )
+
+    responsible_employee = db.relationship(
+        "DepartmentEmployee",
+        back_populates="checklist_responses",
+    )
+
+    @property
+    def not_applicable_reason(self):
+        """
+        Temporary compatibility alias for checklist code that still
+        refers to the previous field name.
+
+        Remove this property after the checklist service and display
+        code have been updated to use response_reason.
+        """
+
+        return self.response_reason
+
+    @not_applicable_reason.setter
+    def not_applicable_reason(
+        self,
+        value,
+    ):
+        self.response_reason = value
+
     def __repr__(self):
-        return f"<ChecklistResponse Task={self.workflow_task_id} Item={self.checklist_item_id}>"
+        return (
+            f"<ChecklistResponse "
+            f"Task={self.workflow_task_id} "
+            f"Item={self.checklist_item_id}>"
+        )
 
 
 class AuditLog(db.Model):

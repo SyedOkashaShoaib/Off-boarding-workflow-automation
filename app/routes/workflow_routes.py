@@ -27,6 +27,7 @@ from app.services.checklist_service import (
     ChecklistSubmissionError,
     persist_checklist_submission,
     validate_checklist_submission,
+    get_active_department_employees,
 )
 from app.services.notification_service import (
     create_task_assignment_notification,
@@ -86,21 +87,27 @@ def build_checklist_sections(
 
 def build_saved_response_values(
     task: WorkflowTask,
-) -> dict[int, dict[str, str]]:
+) -> dict:
     """
-    Convert saved ChecklistResponse records into values that can
-    be displayed by the task template.
+    Convert saved ChecklistResponse records into values displayed
+    by the task template.
     """
 
     return {
         response.checklist_item_id: {
-            "response_status": response.response_status,
+            "response_status": (
+                response.response_status
+            ),
             "reason": (
-                response.not_applicable_reason or ""
+                response.response_reason or ""
+            ),
+            "responsible_employee_id": (
+                response.responsible_employee_id
             ),
         }
         for response in task.responses
     }
+
 COMPLETED_TASK_STATUSES = {
     "SUBMITTED",
     "APPROVED",
@@ -181,24 +188,28 @@ def render_task_detail(
     task: WorkflowTask,
     form: WorkflowChecklistForm,
     checklist_sections: dict,
+    department_employees: list,
     submitted_values: dict,
     validation_errors: dict,
 ):
     """
-    Render the departmental task page with a consistent context.    
+    Render the departmental task page with complete checklist
+    context.
 
-    All task-page responses should use this helper so presentation
-    data is not accidentally omitted from validation-error paths.
+    Every render path must use this helper so submitted selections
+    survive validation failures.
     """
 
     return render_template(
-        'workflow/task_detail.html',
+        "workflow/task_detail.html",
         task=task,
         form=form,
         checklist_sections=checklist_sections,
+        department_employees=(
+            department_employees
+        ),
         submitted_values=submitted_values,
         validation_errors=validation_errors,
-        
     )
 
 def record_task_opening(
@@ -369,7 +380,7 @@ def view_task(task_id):
     form = WorkflowChecklistForm()
 
     checklist_sections = build_checklist_sections(task)
-
+    department_employees = get_active_department_employees(task)
     submitted_values = build_saved_response_values(
         task
     )
@@ -415,12 +426,20 @@ def view_task(task_id):
                 ),
                 "error",
             )
-
+        if not department_employees:
+            flash(
+                (
+                    "This task cannot be submitted because "
+                    "no active employees are configured for "
+                    "the assigned department."
+                ), ("error"),
+            )
             return render_task_detail(
                 task=task,
                 form=form,
                 checklist_sections=checklist_sections,
                 submitted_values=submitted_values,
+                department_employees=department_employees,
                 validation_errors=validation_errors,
             )
 
@@ -439,12 +458,14 @@ def view_task(task_id):
                 checklist_sections=checklist_sections,
                 submitted_values=submitted_values,
                 validation_errors=validation_errors,
+                department_employees=department_employees,
             )
 
         submitted_values, validation_errors = (
             validate_checklist_submission(
                 task=task,
                 form_data=request.form,
+                department_employees=department_employees,
             )
         )
 
@@ -464,6 +485,7 @@ def view_task(task_id):
                 checklist_sections=checklist_sections,
                 submitted_values=submitted_values,
                 validation_errors=validation_errors,
+                department_employees=department_employees,
             )
 
         # -----------------------------------------------------
@@ -471,10 +493,12 @@ def view_task(task_id):
         # Save the checklist and create the next task.
         # -----------------------------------------------------
         try:
+            department_submitter_email=str(task.assigned_to_email or "").strip().lower()
             persist_checklist_submission(
                 task=task,
                 submitted_values=submitted_values,
-                responded_by=task_actor,
+                responded_by=department_submitter_email,
+                
             )
 
             next_task = create_next_workflow_task(
@@ -507,6 +531,7 @@ def view_task(task_id):
                 checklist_sections=checklist_sections,
                 submitted_values=submitted_values,
                 validation_errors=validation_errors,
+                department_employees=department_employees,
             )
 
         except SQLAlchemyError:
@@ -534,6 +559,7 @@ def view_task(task_id):
                 checklist_sections=checklist_sections,
                 submitted_values=submitted_values,
                 validation_errors=validation_errors,
+                department_employees=department_employees,
             )
 
         # -----------------------------------------------------
@@ -577,7 +603,9 @@ def view_task(task_id):
         form=form,
         checklist_sections=checklist_sections,
         submitted_values=submitted_values,
+        department_employees=department_employees,
         validation_errors=validation_errors,
+
     )
 
 @workflow_bp.route(

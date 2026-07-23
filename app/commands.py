@@ -2,7 +2,11 @@ import click
 from flask.cli import with_appcontext
 
 from app.extension import db
-from app.models import ChecklistItem, Department, WorkflowPhase
+from app.models import( 
+    ChecklistItem, 
+    Department, 
+    WorkflowPhase,
+    DepartmentEmployee,)
 
 
 @click.command("seed-data")
@@ -21,6 +25,9 @@ def seed_data_command():
         # Ensure newly added departments have database IDs before
         # workflow phases are created.
         db.session.flush()
+        created_employee_count = (
+            seed_department_employees()
+        )
 
         seed_workflow_phases()
 
@@ -42,6 +49,8 @@ def seed_data_command():
         ) from exc
 
     click.echo("Seed data completed successfully.")
+    click.echo("New department employees created: "
+               f"{created_employee_count}")
     click.echo(
         f"New NOC checklist items created: {created_noc_items}"
     )
@@ -60,19 +69,19 @@ def seed_departments() -> None:
     departments_data = [
         {
             "name": "NOC",
-            "email": "internee@company.com",
+            "email": "intern@BarrettHodsgon.com",
         },
         {
             "name": "MIS",
-            "email": "internee@company.com",
+            "email": "intern@BarrettHodsgon.com",
         },
         {
             "name": "Hardware",
-            "email": "internee@company.com",
+            "email": "intern@BarrettHodsgon.com",
         },
         {
             "name": "Admin",
-            "email": "internee@company.com",
+            "email": "intern@BarrettHodsgon.com",
         },
     ]
 
@@ -93,7 +102,114 @@ def seed_departments() -> None:
         else:
             department.email = department_data["email"]
             department.is_active = True
+def seed_department_employees() -> int:
+    """
+    Insert or update prototype department employees.
 
+    Existing employees are matched by employee code so the command
+    remains safe to run repeatedly.
+    """
+
+    departments = {
+        department.name: department
+        for department in Department.query.all()
+    }
+
+    employees_data = [
+        {
+            "employee_code": "NOC-001",
+            "full_name": "Sir Khurram",
+            "department": "NOC",
+        },
+        {
+            "employee_code": "NOC-002",
+            "full_name": "Habib",
+            "department": "NOC",
+        },
+                {
+            "employee_code": "NOC-003",
+            "full_name": "Anas",
+            "department": "NOC",
+        },
+        {
+            "employee_code": "MIS-001",
+            "full_name": "MIS Officer 1",
+            "department": "MIS",
+        },
+        {
+            "employee_code": "MIS-002",
+            "full_name": "MIS Officer 2",
+            "department": "MIS",
+        },
+        {
+            "employee_code": "HARDWARE-001",
+            "full_name": "Hardware Officer 1",
+            "department": "Hardware",
+        },
+        {
+            "employee_code": "HARDWARE-002",
+            "full_name": "Hardware Officer 2",
+            "department": "Hardware",
+        },
+        {
+            "employee_code": "ADMIN-001",
+            "full_name": "Administration Officer 1",
+            "department": "Admin",
+        },
+        {
+            "employee_code": "ADMIN-002",
+            "full_name": "Administration Officer 2",
+            "department": "Admin",
+        },
+    ]
+
+    created_count = 0
+
+    for employee_data in employees_data:
+        department = departments.get(
+            employee_data["department"]
+        )
+
+        if department is None:
+            raise ValueError(
+                "Required department not found: "
+                f"{employee_data['department']}"
+            )
+
+        employee = (
+            DepartmentEmployee.query
+            .filter_by(
+                employee_code=(
+                    employee_data["employee_code"]
+                )
+            )
+            .first()
+        )
+
+        if employee is None:
+            employee = DepartmentEmployee(
+                employee_code=(
+                    employee_data["employee_code"]
+                ),
+                full_name=(
+                    employee_data["full_name"]
+                ),
+                department=department,
+                is_active=True,
+            )
+
+            db.session.add(employee)
+            created_count += 1
+
+        else:
+            employee.full_name = (
+                employee_data["full_name"]
+            )
+
+            employee.department = department
+            employee.is_active = True
+
+    return created_count
 
 def seed_workflow_phases() -> None:
     """Insert or update the ordered workflow phases."""

@@ -1,144 +1,169 @@
 "use strict";
 
-document.addEventListener("DOMContentLoaded", () => {
-    const form = document.querySelector("[data-checklist-form]");
+document.addEventListener("DOMContentLoaded", () => { const checklistItems = document.querySelectorAll( "[data-checklist-item]" );
 
-    if (!form) {
+/**
+ * Update one checklist item after its response changes.
+ *
+ * The server remains authoritative. This function only improves
+ * the browser experience by showing the relevant reason field.
+ */
+function synchronizeChecklistItem(
+    checklistItem,
+    {
+        clearReasonForYes = false,
+        focusReason = false,
+    } = {}
+) {
+    const responseInputs = Array.from(
+        checklistItem.querySelectorAll(
+            "[data-response-option]"
+        )
+    );
+
+    const selectedResponse = responseInputs.find(
+        (input) => input.checked
+    );
+
+    const reasonContainer = checklistItem.querySelector(
+        "[data-reason-container]"
+    );
+
+    const reasonInput = checklistItem.querySelector(
+        "[data-reason-input]"
+    );
+
+    const reasonLabel = checklistItem.querySelector(
+        "[data-reason-label]"
+    );
+
+    const reasonHint = checklistItem.querySelector(
+        "[data-reason-hint]"
+    );
+
+    const selectedValue = selectedResponse
+        ? selectedResponse.value
+        : "";
+
+    const reasonRequired = (
+        selectedValue === "NO"
+        || selectedValue === "NOT_APPLICABLE"
+    );
+
+    responseInputs.forEach((input) => {
+        const option = input.closest(
+            ".response-option"
+        );
+
+        if (option) {
+            option.classList.toggle(
+                "response-option--selected",
+                input.checked
+            );
+        }
+    });
+
+    if (!reasonContainer || !reasonInput) {
         return;
     }
 
-    const checklistItems = form.querySelectorAll(
-        "[data-checklist-item]"
+    reasonContainer.hidden = !reasonRequired;
+
+    reasonInput.required = (
+        reasonRequired
+        && !reasonInput.disabled
     );
 
-    checklistItems.forEach((item) => {
-        const yesInput = item.querySelector(
-            'input[type="radio"][value="YES"]'
-        );
-
-        const notApplicableInput = item.querySelector(
-            'input[type="radio"][value="NOT_APPLICABLE"]'
-        );
-
-        const reasonContainer = item.querySelector(
-            "[data-reason-container]"
-        );
-
-        const reasonInput = item.querySelector(
-            "[data-reason-input]"
-        );
-
-        if (
-            !yesInput
-            || !notApplicableInput
-            || !reasonContainer
-            || !reasonInput
-        ) {
-            return;
-        }
-
-        const updateReasonState = () => {
-            const isNotApplicable =
-                notApplicableInput.checked;
-
-            reasonContainer.classList.toggle(
-                "is-collapsed",
-                !isNotApplicable
-            );
-
-            reasonInput.disabled = !isNotApplicable;
-            reasonInput.required = isNotApplicable;
-
-            reasonInput.setAttribute(
-                "aria-required",
-                String(isNotApplicable)
-            );
-        };
-
-        yesInput.addEventListener(
-            "change",
-            updateReasonState
-        );
-
-        notApplicableInput.addEventListener(
-            "change",
-            () => {
-                updateReasonState();
-
-                if (notApplicableInput.checked) {
-                    reasonInput.focus();
-                }
-            }
-        );
-
-        updateReasonState();
-    });
-
-
-    const errorSummary = document.querySelector(
-        "#checklist-error-summary"
+    reasonInput.setAttribute(
+        "aria-required",
+        reasonRequired ? "true" : "false"
     );
 
-    if (errorSummary) {
-        errorSummary.focus();
+    checklistItem.classList.toggle(
+        "checklist-item--requires-reason",
+        reasonRequired
+    );
+
+    if (
+        selectedValue === "YES"
+        && clearReasonForYes
+    ) {
+        reasonInput.value = "";
     }
 
-
-    const dialog = document.querySelector(
-        "#checklist-submit-dialog"
-    );
-
-    const cancelButton = dialog?.querySelector(
-        "[data-dialog-cancel]"
-    );
-
-    const confirmButton = dialog?.querySelector(
-        "[data-dialog-confirm]"
-    );
-
-    const submitButton = form.querySelector(
-        'input[type="submit"], button[type="submit"]'
-    );
-
-    let submissionConfirmed = false;
-
-
-    form.addEventListener("submit", (event) => {
-        if (submissionConfirmed) {
-            return;
-        }
-
-        if (
-            !dialog
-            || typeof dialog.showModal !== "function"
+    if (reasonLabel) {
+        if (selectedValue === "NO") {
+            reasonLabel.textContent =
+                "Reason for No";
+        } else if (
+            selectedValue === "NOT_APPLICABLE"
         ) {
-            return;
-        }
-
-        event.preventDefault();
-        dialog.showModal();
-    });
-
-
-    cancelButton?.addEventListener("click", () => {
-        dialog.close();
-        submitButton?.focus();
-    });
-
-
-    confirmButton?.addEventListener("click", () => {
-        submissionConfirmed = true;
-        dialog.close();
-
-        if (typeof form.requestSubmit === "function") {
-            form.requestSubmit(submitButton);
+            reasonLabel.textContent =
+                "Reason for Not applicable";
         } else {
-            form.submit();
+            reasonLabel.textContent =
+                "Reason or explanation";
         }
-    });
+    }
 
+    if (reasonHint) {
+        if (selectedValue === "NO") {
+            reasonHint.textContent =
+                "Explain why the action was not completed.";
+        } else if (
+            selectedValue === "NOT_APPLICABLE"
+        ) {
+            reasonHint.textContent =
+                "Explain why this action does not apply.";
+        } else {
+            reasonHint.textContent =
+                "Required when the response is No "
+                + "or Not applicable.";
+        }
+    }
 
-    dialog?.addEventListener("cancel", () => {
-        submitButton?.focus();
+    if (
+        reasonRequired
+        && focusReason
+        && !reasonInput.disabled
+    ) {
+        reasonInput.focus();
+    }
+}
+
+checklistItems.forEach((checklistItem) => {
+    const responseInputs = checklistItem.querySelectorAll(
+        "[data-response-option]"
+    );
+
+    /*
+     * Apply the correct initial state for:
+     * - a new checklist;
+     * - values restored after server validation;
+     * - previously saved values.
+     */
+    synchronizeChecklistItem(
+        checklistItem
+    );
+
+    responseInputs.forEach((input) => {
+        input.addEventListener(
+            "change",
+            () => {
+                synchronizeChecklistItem(
+                    checklistItem,
+                    {
+                        clearReasonForYes: true,
+                        focusReason: (
+                            input.value === "NO"
+                            || input.value
+                                === "NOT_APPLICABLE"
+                        ),
+                    }
+                );
+            }
+        );
     });
+});
+
 });
