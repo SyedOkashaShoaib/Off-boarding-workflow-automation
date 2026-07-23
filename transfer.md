@@ -1066,3 +1066,103 @@
 {% block scripts %}
 <script src="{{url_for('static',filename='js/case_detail.js')}}" defer></script>
 {% endblock %}
+UndefinedError
+
+jinja2.exceptions.UndefinedError: No first item, sequence was empty.
+Traceback (most recent call last)
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\.venv\lib\site-packages\flask\app.py", line 1536, in __call__
+
+    return self.wsgi_app(environ, start_response)
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\.venv\lib\site-packages\flask\app.py", line 1514, in wsgi_app
+
+    response = self.handle_exception(e)
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\.venv\lib\site-packages\flask\app.py", line 1511, in wsgi_app
+
+    response = self.full_dispatch_request()
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\.venv\lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+
+    rv = self.handle_user_exception(e)
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\.venv\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+
+    rv = self.dispatch_request()
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\.venv\lib\site-packages\flask\app.py", line 902, in dispatch_request
+
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\.venv\lib\site-packages\flask_login\utils.py", line 290, in decorated_view
+
+    return current_app.ensure_sync(func)(*args, **kwargs)
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\app\routes\case_routes.py", line 270, in case_detail
+
+    return render_template(
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\.venv\lib\site-packages\flask\templating.py", line 151, in render_template
+
+    return _render(app, template, context)
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\.venv\lib\site-packages\flask\templating.py", line 132, in _render
+
+    rv = template.render(context)
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\.venv\lib\site-packages\jinja2\environment.py", line 1295, in render
+
+    self.environment.handle_exception()
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\.venv\lib\site-packages\jinja2\environment.py", line 942, in handle_exception
+
+    raise rewrite_traceback_stack(source=source)
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\app\templates\cases\detail.html", line 1, in top-level template code
+
+    {% extends "base.html" %}
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\app\templates\base.html", line 321, in top-level template code
+
+                        id="main-content"
+
+                        class="application-content"
+
+                        tabindex="-1"
+
+                    >
+
+     
+
+                        {% block content %}{% endblock %}
+
+     
+
+                    </main>
+
+     
+
+                </div>
+
+     
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\app\templates\cases\detail.html", line 628, in block 'content'
+
+    or "Not recorded"
+
+    File "C:\Users\intern\Desktop\intern_summer_26\offboarding_workflow\.venv\lib\site-packages\jinja2\environment.py", line 490, in getattr
+
+    return getattr(obj, attribute)
+
+    jinja2.exceptions.UndefinedError: No first item, sequence was empty.
+
+The debugger caught an exception in your WSGI application. You can now look at the traceback which led to the error.
+
+To switch between the interactive traceback and the plaintext one, you can click on the "Traceback" headline. From the text traceback you can also create a paste of it. For code execution mouse-over the frame you want to debug and click on the console icon on the right side.
+
+You can execute arbitrary Python code in the stack frames and there are some extra helpers available for introspection:
+
+    dump() shows all variables in the frame
+    dump(obj) dumps all that's known about the object
+
