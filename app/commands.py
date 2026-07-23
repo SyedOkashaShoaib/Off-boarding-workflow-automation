@@ -1,6 +1,6 @@
 import click
 from flask.cli import with_appcontext
-
+from flask import current_app
 from app.extension import db
 from app.models import( 
     ChecklistItem, 
@@ -65,23 +65,29 @@ def seed_data_command():
 
 def seed_departments() -> None:
     """Insert or update workflow departments."""
-
+    prototype_email= str(
+        current_app.config.get(
+            "SMTP_ALLOWED_RECIPIENT",
+            "",
+        )
+        or "intern@BarrettHodgson.com"
+    ).strip().lower()
     departments_data = [
         {
             "name": "NOC",
-            "email": "intern@BarrettHodsgon.com",
+            "email": prototype_email,
         },
         {
             "name": "MIS",
-            "email": "intern@BarrettHodsgon.com",
+            "email": prototype_email,
         },
         {
             "name": "Hardware",
-            "email": "intern@BarrettHodsgon.com",
+            "email": prototype_email,
         },
         {
             "name": "Admin",
-            "email": "intern@BarrettHodsgon.com",
+            "email": prototype_email,
         },
     ]
 

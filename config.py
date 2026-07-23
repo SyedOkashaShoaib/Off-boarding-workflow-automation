@@ -71,6 +71,15 @@ class Config:
         "EMAIL_BACKEND",
         "console",
     )
+    SMTP_HOST=os.environ.get(
+        "SMTP_HOST",
+        "",
+    ).strip()
+    SMTP_PORT = environment_positive_integer(
+        "SMTP_PORT",
+        default=25,
+    )
+    
 
     APP_BASE_URL = os.environ.get(
         "APP_BASE_URL",
@@ -117,3 +126,4 @@ class Config:
     PERMANENT_SESSION_LIFETIME = timedelta(
         hours=8
     )
+
