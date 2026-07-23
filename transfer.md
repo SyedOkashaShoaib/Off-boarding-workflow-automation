@@ -1,49 +1,41 @@
-@media (max-width: 1050px) {
-
-    .checklist-record__heading {
-        grid-template-columns:
-            minmax(0, 1fr)
-            auto;
-    }
-
-
-    .checklist-record__metadata {
-        grid-column: 1 / -1;
-        grid-row: 2;
-    }
-
+.checklist-record__heading {
+    display: grid;
+    grid-template-columns:
+        minmax(0, 1fr)
+        auto;
+    gap: 2mm 5mm;
 }
 
 
-@media (max-width: 760px) {
-
-    .checklist-record__heading {
-        grid-template-columns: 1fr;
-        align-items: start;
-    }
-
-
-    .checklist-record__metadata {
-        grid-column: auto;
-        grid-row: auto;
-        grid-template-columns: 1fr;
-        width: 100%;
-    }
+.checklist-record__metadata {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+    gap: 2mm 6mm;
+}
 
 
-    .checklist-record__metadata dd {
-        max-width: none;
-    }
+.checklist-record__metadata dt {
+    color: #222 !important;
+    font-size: 7pt;
+}
 
 
-    .checklist-record__heading > .register-status {
-        justify-self: start;
-    }
+.checklist-record__metadata dd {
+    max-width: none;
+    color: #000 !important;
+    font-size: 8pt;
+}
 
 
-    .audit-entry__heading {
-        align-items: flex-start;
-        flex-direction: column;
-    }
+.checklist-record__heading > .register-status {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+}
 
+
+.checklist-responsible-employee__code {
+    color: #222 !important;
 }
