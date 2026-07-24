@@ -62,116 +62,157 @@
     ) %}
 
 
-    <section class="task-summary-card">
-        <div class="task-summary-card__case">
-            <span class="task-summary-card__label">
-                Case Number
-            </span>
+<section
+    class="task-record-panel"
+    aria-labelledby="task-record-panel-title"
+>
+    <header class="task-record-panel__header">
+        <h2 id="task-record-panel-title">
+            Offboarding Task Information
+        </h2>
+    </header>
 
-            <strong class="task-summary-card__case-number">
+    <dl class="task-record-grid">
+        <div class="task-record-grid__item">
+            <dt>Case Number</dt>
+
+            <dd>
                 {{ task.case.case_number }}
-            </strong>
+            </dd>
         </div>
 
-        <div class="task-summary-card__main">
-            <div>
-                <p class="task-summary-card__eyebrow">
-                    Workflow phase
-                </p>
-
-                <h2 class="task-summary-card__title">
-                    {{ task.phase.name }}
-                </h2>
-
-                <p class="task-summary-card__department">
-                    Responsible department:
-                    <strong>
-                        {{ task.phase.department.name }}
-                    </strong>
-                </p>
-            </div>
-
-            <span
-                class="
-                    status-badge
-                    status-badge--{{
-                        task.status
-                        | lower
-                        | replace('_', '-')
-                    }}
-                "
-            >
-                {{ status_label }}
-            </span>
-        </div>
-
-        <dl class="task-summary-card__metadata">
-            <div>
-                <dt>Status</dt>
-                <dd>{{ status_label }}</dd>
-            </div>
-
-            <div>
-                <dt>Due Date</dt>
+        <div class="task-record-grid__item">
+               <dt>Assigned At</dt>
                 <dd>
-                    {% if task.due_at %}
-                        {{ task.due_at.strftime(
+                    {% if task.assigned_at %}
+                        {{ task.assigned_at.strftime(
                             "%d %B %Y, %I:%M %p"
-                        ) }}
-                    {% else %}
-                        Not assigned
-                    {% endif %}
-                </dd>
-            </div>
-        </dl>
-    </section>
-
-
-    <section class="information-card">
-        <header class="information-card__header">
-            <h2>Employee Information</h2>
-        </header>
-
-        <dl class="information-grid">
-            <div class="information-grid__item">
-                <dt>Employee Name</dt>
-                <dd>{{ task.case.employee_name }}</dd>
-            </div>
-
-            <div class="information-grid__item">
-                <dt>Employee ID</dt>
-                <dd>{{ task.case.employee_id }}</dd>
-            </div>
-
-            <div class="information-grid__item">
-                <dt>Designation</dt>
-                <dd>{{ task.case.designation }}</dd>
-            </div>
-
-            <div class="information-grid__item">
-                <dt>Employee Department</dt>
-                <dd>{{ task.case.department }}</dd>
-            </div>
-
-            <div class="information-grid__item">
-                <dt>Line Manager</dt>
-                <dd>{{ task.case.line_manager }}</dd>
-            </div>
-
-            <div class="information-grid__item">
-                <dt>Last Working Day</dt>
-                <dd>
-                    {% if task.case.last_working_day %}
-                        {{ task.case.last_working_day.strftime(
-                            "%d %B %Y"
                         ) }}
                     {% else %}
                         Not recorded
                     {% endif %}
                 </dd>
-            </div>
-        </dl>
-    </section>
+        </div>
+        <div class="task-record-grid__item">
+                        <dt>Opened At</dt>
+                <dd>
+                    {% if task.opened_at %}
+                        {{ task.opened_at.strftime(
+                            "%d %B %Y, %I:%M %p"
+                        ) }}
+                    {% else %}
+                        Not recorded
+                    {% endif %}
+                </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Due Date</dt>
+
+            <dd>
+                {% if task.due_at %}
+                    {{
+                        task.due_at.strftime(
+                            "%d %B %Y, %I:%M %p"
+                        )
+                    }}
+                {% else %}
+                    Not assigned
+                {% endif %}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Task Status</dt>
+
+            <dd>
+                <span
+                    class="
+                        status-badge
+                        status-badge--{{
+                            task.status
+                            | lower
+                            | replace('_', '-')
+                        }}
+                    "
+                >
+                    {{ status_label }}
+                </span>
+            </dd>
+        </div>
+        <div class="task-record-grid__item">
+            <dt>Workflow Phase</dt>
+
+            <dd>
+                {{ task.phase.name }}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Responsible Department</dt>
+
+            <dd>
+                {{ task.phase.department.name }}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Employee Name</dt>
+
+            <dd>
+                {{ task.case.employee_name }}
+            </dd>
+        </div>
+
+        <!-- <div class="task-record-grid__item">
+            <dt>Employee ID</dt>
+
+            <dd>
+                {{ task.case.employee_id }}
+            </dd>
+        </div> -->
+
+        <div class="task-record-grid__item">
+            <dt>Designation</dt>
+
+            <dd>
+                {{ task.case.designation }}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Employee Department</dt>
+
+            <dd>
+                {{ task.case.department }}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Line Manager</dt>
+
+            <dd>
+                {{ task.case.line_manager or "Not recorded" }}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Last Working Day</dt>
+
+            <dd>
+                {% if task.case.last_working_day %}
+                    {{
+                        task.case.last_working_day.strftime(
+                            "%d %B %Y"
+                        )
+                    }}
+                {% else %}
+                    Not recorded
+                {% endif %}
+            </dd>
+        </div>
+    </dl>
+</section>
 
 
     {% if submitted %}
@@ -921,7 +962,7 @@
     {% endif %}
 
 
-    <section class="assignment-details">
+    <!-- <section class="assignment-details">
         <h2>Assignment Details</h2>
 
         <dl class="information-grid">
@@ -956,7 +997,7 @@
                 </dd>
             </div>
         </dl>
-    </section>
+    </section> -->
 {% endblock %}
 
 
