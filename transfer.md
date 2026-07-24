@@ -1,57 +1,139 @@
-.confirmation-dialog {
-    width: min(500px, calc(100vw - 32px));
-    padding: 0;
-    overflow: hidden;
-    color: var(--text-primary);
-    background: #f7fafc;
-    border: 1px solid #496c84;
-    border-radius: var(--radius-medium);
-    box-shadow:
-        0 18px 50px rgba(17, 38, 54, 0.40);
-}
+<section
+    class="task-record-panel"
+    aria-labelledby="task-record-panel-title"
+>
+    <header class="task-record-panel__header">
+        <h2 id="task-record-panel-title">
+            Offboarding Task Information
+        </h2>
+    </header>
 
-.confirmation-dialog::backdrop {
-    background: rgba(25, 43, 56, 0.48);
-    backdrop-filter: blur(1px);
-}
+    <dl class="task-record-grid">
+        <div class="task-record-grid__item">
+            <dt>Case Number</dt>
 
-.confirmation-dialog__header {
-    padding: 11px 14px;
-    color: var(--aero-header-text, #29485d);
-    background: var(
-        --aero-panel-header-background,
-        linear-gradient(to bottom, #f9fcfe, #dce8f1)
-    );
-    border-bottom: 1px solid var(--border-medium);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.98),
-        inset 0 -1px 0 rgba(43, 72, 93, 0.13);
-}
+            <dd>
+                {{ task.case.case_number }}
+            </dd>
+        </div>
 
-.confirmation-dialog__header h2 {
-    margin: 0;
-    color: inherit;
-    font-size: 17px;
-}
+        <div class="task-record-grid__item">
+            <dt>Case Status</dt>
 
-.confirmation-dialog__body {
-    padding: 18px;
-}
+            <dd>
+                {{
+                    (task.case.status or "Not recorded")
+                    | replace("_", " ")
+                    | title
+                }}
+            </dd>
+        </div>
 
-.confirmation-dialog__body p {
-    margin: 0;
-}
+        <div class="task-record-grid__item">
+            <dt>Task Status</dt>
 
-.confirmation-dialog__body p + p {
-    margin-top: 10px;
-    color: var(--text-secondary);
-}
+            <dd>
+                <span
+                    class="
+                        status-badge
+                        status-badge--{{
+                            task.status
+                            | lower
+                            | replace('_', '-')
+                        }}
+                    "
+                >
+                    {{ status_label }}
+                </span>
+            </dd>
+        </div>
 
-.confirmation-dialog__actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 9px;
-    padding: 12px 15px;
-    background: #e8eef2;
-    border-top: 1px solid #b6c4ce;
-}
+        <div class="task-record-grid__item">
+            <dt>Due Date</dt>
+
+            <dd>
+                {% if task.due_at %}
+                    {{
+                        task.due_at.strftime(
+                            "%d %B %Y, %I:%M %p"
+                        )
+                    }}
+                {% else %}
+                    Not assigned
+                {% endif %}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Workflow Phase</dt>
+
+            <dd>
+                {{ task.phase.name }}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Responsible Department</dt>
+
+            <dd>
+                {{ task.phase.department.name }}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Employee Name</dt>
+
+            <dd>
+                {{ task.case.employee_name }}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Employee ID</dt>
+
+            <dd>
+                {{ task.case.employee_id }}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Designation</dt>
+
+            <dd>
+                {{ task.case.designation }}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Employee Department</dt>
+
+            <dd>
+                {{ task.case.department }}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Line Manager</dt>
+
+            <dd>
+                {{ task.case.line_manager or "Not recorded" }}
+            </dd>
+        </div>
+
+        <div class="task-record-grid__item">
+            <dt>Last Working Day</dt>
+
+            <dd>
+                {% if task.case.last_working_day %}
+                    {{
+                        task.case.last_working_day.strftime(
+                            "%d %B %Y"
+                        )
+                    }}
+                {% else %}
+                    Not recorded
+                {% endif %}
+            </dd>
+        </div>
+    </dl>
+</section>
