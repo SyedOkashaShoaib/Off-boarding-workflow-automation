@@ -1,29 +1,370 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="{{url_for('static', filename='css/style.css')}}">
-    
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <meta
+        name="description"
+        content="Internal employee offboarding workflow system."
+    >
+
+    <title>
+        {% block title %}
+            Offboarding Workflow System
+        {% endblock %}
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for(
+            'static',
+            filename='css/app.css'
+        ) }}"
+    >
+
+    {% block head %}{% endblock %}
 </head>
+
+
 <body>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class = "flash{{category}}">
-                        {{message}}
+
+    {% set current_endpoint = request.endpoint or "" %}
+
+    {% set environment_label = config.get(
+        "ENVIRONMENT_LABEL",
+        "Development"
+    ) %}
+
+    {% set email_backend = config.get(
+        "EMAIL_BACKEND",
+        "console"
+    ) %}
+
+
+    <a
+        class="skip-link"
+        href="#main-content"
+    >
+        Skip to main content
+    </a>
+
+
+    <div class="application-shell">
+
+        <!-- Application title bar -->
+        <header class="application-header">
+
+            <div class="application-header__identity">
+
+                <!-- <span
+                    class="application-header__icon"
+                    aria-hidden="true"
+                >
+                    ◈
+                </span> -->
+
+                <div>
+                    <div class="application-header__name">
+                        Barrett Hodgson
                     </div>
-                {% endfor %}
+
+                    <div class="application-header__subtitle">
+                        Offboarding Workflow System
+                    </div>
+                </div>
+
+            </div>
+
+
+            <div class="application-header__utilities">
+
+                <span class="environment-indicator">
+                    {{ environment_label }}
+                </span>
+                {% if current_user.is_authenticated %}
+
+    {% set portal_role_labels = {
+        "NOC_OPERATOR": "NOC Operator",
+        "FINAL_APPROVER": "Final Approver",
+        "SYSTEM_ADMIN": "System Administrator"
+    } %}
+
+    <div class="portal-user">
+
+        <span class="portal-user__name">
+            {{ current_user.full_name }}
+        </span>
+
+        <span class="portal-user__role">
+            {{
+                portal_role_labels.get(
+                    current_user.role,
+                    current_user.role
+                    | replace("_", " ")
+                    | title
+                )
+            }}
+        </span>
+
+    </div>
+
+
+    <form
+        method="post"
+        action="{{ url_for('auth.logout') }}"
+        class="portal-logout-form"
+    >
+        {{ logout_form.hidden_tag() }}
+
+        <button
+            type="submit"
+            class="header-action-button"
+        >
+            Sign Out
+        </button>
+    </form>
+
+{% endif %}
+            </div>
+
+        </header>
+
+
+        <div class="application-body">
+
+            <!-- Primary navigation -->
+            <aside class="application-sidebar">
+
+                <nav
+                    class="application-navigation"
+                    aria-label="Primary navigation"
+                >
+
+                    <section
+                        class="navigation-group"
+                        aria-labelledby="operations-navigation-title"
+                    >
+
+                        <h2
+                            id="operations-navigation-title"
+                            class="navigation-group__title"
+                        >
+                            Operations
+                        </h2>
+
+                        <ul class="navigation-list">
+
+                            <li class="navigation-list__item">
+
+   <a
+    href="{{ url_for('cases.create_case') }}"
+    class="navigation-link"
+    title="Create a new offboarding case"
+>
+    <span
+        class="navigation-link__icon"
+        aria-hidden="true"
+    >
+        ＋
+    </span>
+
+    <span class="navigation-link__label">
+        Create New Case
+    </span>
+</a>
+
+                            <li class="navigation-list__item">
+
+    <a
+        href="{{ url_for('cases.list_cases') }}"
+        class="
+            navigation-link
+            {% if current_endpoint == 'cases.list_cases' %}
+                navigation-link--current
             {% endif %}
-        {% endwith %}
-    <nav class="navbar">
-        <div class="nav-title">Offboarding Workflow System</div>
-        <div class="nav-link">
+        "
+        title="Search and monitor offboarding cases"
+
+        {% if current_endpoint == "cases.list_cases" %}
+            aria-current="page"
+        {% endif %}
+    >
+
+        <span
+            class="navigation-link__icon"
+            aria-hidden="true"
+        >
+            ▤
+        </span>
+
+        <span class="navigation-link__label">
+            Cases
+        </span>
+
+    </a>
+
+</li>
+                        </ul>
+
+                    </section>
 
 
-            {% block content %}
-            {% endblock %}
+                    <!-- <section
+                        class="navigation-group navigation-group--future"
+                        aria-labelledby="records-navigation-title"
+                    >
+
+                        <h2
+                            id="records-navigation-title"
+                            class="navigation-group__title"
+                        >
+                            Records
+                        </h2>
+
+                        <p class="navigation-placeholder">
+                            Dashboard and case records will appear here
+                            as their routes are implemented.
+                        </p>
+
+                    </section> -->
+
+                </nav>
+
+            </aside>
+
+
+            <!-- Main work area -->
+            <div class="application-workspace">
+
+                <header class="page-context">
+
+                    {% block breadcrumbs %}{% endblock %}
+
+                    {% block page_header %}{% endblock %}
+
+                </header>
+
+
+                {% with messages =
+                    get_flashed_messages(
+                        with_categories=true
+                    )
+                %}
+
+                    {% if messages %}
+
+                        <section
+                            class="system-messages"
+                            aria-label="System messages"
+                            aria-live="polite"
+                        >
+
+                            {% for category, message in messages %}
+
+                                <div
+                                    class="
+                                        system-message
+                                        system-message--{{ category }}
+                                    "
+
+                                    role="{% if category in [
+                                        'error',
+                                        'danger'
+                                    ] %}alert{% else %}status{% endif %}"
+                                >
+
+                                    <span
+                                        class="system-message__icon"
+                                        aria-hidden="true"
+                                    >
+                                        {% if category in [
+                                            "error",
+                                            "danger"
+                                        ] %}
+                                            ×
+                                        {% elif category == "warning" %}
+                                            !
+                                        {% elif category == "success" %}
+                                            ✓
+                                        {% else %}
+                                            i
+                                        {% endif %}
+                                    </span>
+
+                                    <p class="system-message__text">
+                                        {{ message }}
+                                    </p>
+
+                                </div>
+
+                            {% endfor %}
+
+                        </section>
+
+                    {% endif %}
+
+                {% endwith %}
+
+
+                <main
+                    id="main-content"
+                    class="application-content"
+                    tabindex="-1"
+                >
+
+                    {% block content %}{% endblock %}
+
+                </main>
+
+            </div>
+
         </div>
-    </nav>
+
+
+        <!-- Application status bar -->
+        <footer class="application-status-bar">
+
+            <span class="status-bar-item">
+                Environment:
+                <strong>{{ environment_label }}</strong>
+            </span>
+
+            <span
+                class="status-bar-separator"
+                aria-hidden="true"
+            >
+                |
+            </span>
+
+            <span class="status-bar-item">
+                Email:
+                <strong>{{ email_backend | upper }}</strong>
+            </span>
+
+            <span
+                class="status-bar-separator"
+                aria-hidden="true"
+            >
+                |
+            </span>
+
+            <span class="status-bar-item">
+                Internal workflow application
+            </span>
+
+        </footer>
+
+    </div>
+
+
+    {% block scripts %}{% endblock %}
+
 </body>
+
 </html>

@@ -1,12 +1,260 @@
 from datetime import datetime, timedelta, timezone
-
+from flask_login import UserMixin
 from app.extension import db
+from sqlalchemy.orm import validates
+from werkzeug.security import (
+    check_password_hash,
+    generate_password_hash,
+)
 
 
 def utc_now():
     return datetime.now(timezone.utc)
 
+ROLE_NOC_OPERATOR = "NOC_OPERATOR"
+ROLE_FINAL_APPROVER = 'FINAL_APPROVER'
+ROLE_SYSTEM_ADMIN = 'SYSTEM_ADMIN'
 
+PORTAL_ROLES = (
+    ROLE_NOC_OPERATOR,
+    ROLE_FINAL_APPROVER,
+    ROLE_SYSTEM_ADMIN,
+)
+class DepartmentEmployee(db.Model):
+    """
+    Employee available for selection as the person responsible
+    for an individual departmental checklist item.
+    """
+
+    __tablename__ = "department_employees"
+
+    __table_args__ = (
+        db.Index(
+            "ix_department_employees_department_active",
+            "department_id",
+            "is_active",
+        ),
+    )
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
+
+    department_id = db.Column(
+        db.Integer,
+        db.ForeignKey("departments.id"),
+        nullable=False,
+    )
+
+    employee_code = db.Column(
+        db.String(50),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    full_name = db.Column(
+        db.String(150),
+        nullable=False,
+    )
+
+    is_active = db.Column(
+        db.Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    department = db.relationship(
+        "Department",
+        back_populates="employees",
+    )
+    checklist_responses= db.relationship(
+        "ChecklistResponse",
+        back_populates='responsible_employee',
+    )
+    def __repr__(self):
+        return (
+            f"<DepartmentEmployee "
+            f"{self.employee_code} "
+            f"{self.full_name}>"
+        )
+
+class User(UserMixin, db.Model):
+    """
+    Authenticated portal user.
+
+    Departmental task recipients will use separate task-specific
+    access grants later and are not represented by this model unless
+    they are also authorised portal users.
+    """
+
+    __tablename__ = "users"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
+
+    email = db.Column(
+        db.String(254),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    full_name = db.Column(
+        db.String(150),
+        nullable=False,
+    )
+
+    password_hash = db.Column(
+        db.String(512),
+        nullable=False,
+    )
+
+    role = db.Column(
+        db.String(50),
+        nullable=False,
+        default=ROLE_NOC_OPERATOR,
+    )
+
+    active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    last_login_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+    @property
+    def is_active(self) -> bool:
+        """
+        Flask-Login uses this property to determine whether the
+        account is permitted to establish an authenticated session.
+        """
+
+        return bool(self.active)
+
+    @staticmethod
+    def normalize_email(value: str) -> str:
+        """
+        Return the canonical representation used for login and
+        uniqueness checks.
+        """
+
+        return str(value or "").strip().lower()
+
+    @validates("email")
+    def validate_email(
+        self,
+        key: str,
+        value: str,
+    ) -> str:
+        """
+        Normalize portal email addresses before persistence.
+        """
+
+        normalized_email = self.normalize_email(value)
+
+        if not normalized_email:
+            raise ValueError(
+                "A portal user email address is required."
+            )
+
+        return normalized_email
+
+    @validates("role")
+    def validate_role(
+        self,
+        key: str,
+        value: str,
+    ) -> str:
+        """
+        Reject unsupported portal roles.
+        """
+
+        normalized_role = str(value or "").strip().upper()
+
+        if normalized_role not in PORTAL_ROLES:
+            raise ValueError(
+                f"Unsupported portal role: {normalized_role}"
+            )
+
+        return normalized_role
+
+    def set_password(
+        self,
+        password: str,
+    ) -> None:
+        """
+        Hash and store a plaintext password.
+
+        Plaintext passwords must never be stored in the database.
+        """
+
+        if not password:
+            raise ValueError(
+                "A password is required."
+            )
+
+        self.password_hash = generate_password_hash(
+            password
+        )
+
+    def check_password(
+        self,
+        password: str,
+    ) -> bool:
+        """
+        Compare a submitted password with the stored hash.
+        """
+
+        if not password or not self.password_hash:
+            return False
+
+        return check_password_hash(
+            self.password_hash,
+            password,
+        )
+
+    def has_role(
+        self,
+        *roles: str,
+    ) -> bool:
+        """
+        Return whether this user has one of the supplied roles.
+        """
+
+        normalized_roles = {
+            str(role).strip().upper()
+            for role in roles
+        }
+
+        return self.role in normalized_roles
+
+    def __repr__(self) -> str:
+        return (
+            f"<User id={self.id} "
+            f"email={self.email!r} "
+            f"role={self.role!r}>"
+        )
 class Department(db.Model):
     __tablename__ = "departments"
 
@@ -16,6 +264,8 @@ class Department(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     phases = db.relationship("WorkflowPhase", back_populates="department")
+    employees = db.relationship("DepartmentEmployee", back_populates='department', 
+                                order_by='DepartmentEmployee.full_name', )
 
     def __repr__(self):
         return f"<Department {self.name}>"
@@ -81,7 +331,23 @@ class ChecklistItem(db.Model):
 
 class OffboardingCase(db.Model):
     __tablename__ = "offboarding_cases"
+    __table_args__=(
+        db.Index(
+        "ix_offboarding_case_status_updated_at",
+        "status",
+        "updated_at",
+    ),
+        db.Index(
+            "ix_offboarding_case_current_phase_status",
+            "current_phase_id",
+            "status",
+        ),
+        db.Index(
+            "ix_offboarding_case_employee_id",
+            "employee_id",
+        ),
 
+    )
     id = db.Column(db.Integer, primary_key=True)
 
     case_number = db.Column(db.String(50), unique=True, nullable=False)
@@ -143,7 +409,19 @@ class OffboardingCase(db.Model):
 
 class WorkflowTask(db.Model):
     __tablename__ = "workflow_tasks"
-
+    __table_args__= (
+        db.UniqueConstraint(
+            "case_id",
+            "phase_id",
+            name="uq_workflow_tasks_case_phase",
+        ),
+        db.Index(
+            "ix_workflow_tasks_status_due_at",
+            "status",
+            "due_at",
+        ),
+        
+    )
     id = db.Column(db.Integer, primary_key=True)
 
     case_id = db.Column(
@@ -184,63 +462,219 @@ class WorkflowTask(db.Model):
         back_populates="workflow_task",
         cascade="all, delete-orphan"
     )
-
+    notifications= db.relationship(
+        "EmailNotification", 
+        back_populates='workflow_task', 
+        cascade='all, delete-orphan')
+    access_grants = db.relationship(
+    "TaskAccessGrant",
+    back_populates="workflow_task",
+    cascade="all, delete-orphan",
+)
     def __repr__(self):
         return f"<WorkflowTask Case={self.case_id} Phase={self.phase_id} Status={self.status}>"
+class TaskAccessGrant(db.Model):
+    """
+    Secure access grant for one departmental workflow task.
 
+    The raw token is sent through email but is never stored in the
+    database. Only its SHA-256 digest is persisted.
+    """
 
-class ChecklistResponse(db.Model):
-    __tablename__ = "checklist_responses"
+    __tablename__ = "task_access_grants"
 
-    id = db.Column(db.Integer, primary_key=True)
+    __table_args__ = (
+        db.Index(
+            "ix_task_access_grants_task_state",
+            "workflow_task_id",
+            "revoked_at",
+            "consumed_at",
+        ),
+    )
 
-    case_id = db.Column(
+    id = db.Column(
         db.Integer,
-        db.ForeignKey("offboarding_cases.id"),
-        nullable=False
+        primary_key=True,
     )
 
     workflow_task_id = db.Column(
         db.Integer,
         db.ForeignKey("workflow_tasks.id"),
-        nullable=False
+        nullable=False,
     )
 
-    checklist_item_id = db.Column(
-        db.Integer,
-        db.ForeignKey("checklist_items.id"),
-        nullable=False
+    token_hash = db.Column(
+        db.String(64),
+        unique=True,
+        nullable=False,
     )
 
-    response_status = db.Column(db.String(50), nullable=False)
-    not_applicable_reason = db.Column(db.Text, nullable=True)
+    recipient_email = db.Column(
+        db.String(254),
+        nullable=False,
+    )
 
-    responded_by = db.Column(db.String(150), nullable=True)
+    expires_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
 
-    responded_at = db.Column(
+    created_at = db.Column(
         db.DateTime(timezone=True),
         default=utc_now,
-        nullable=False
+        nullable=False,
     )
 
-    workflow_task = db.relationship("WorkflowTask", back_populates="responses")
-    checklist_item = db.relationship("ChecklistItem", back_populates="responses")
+    last_accessed_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    access_count = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+
+    consumed_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    revoked_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    workflow_task = db.relationship(
+        "WorkflowTask",
+        back_populates="access_grants",
+    )
+
+    def __repr__(self):
+        return (
+            f"<TaskAccessGrant id={self.id} "
+            f"task={self.workflow_task_id}>"
+        )
+
+class ChecklistResponse(db.Model):
+    """
+    Recorded response for one checklist item within one workflow
+    task.
+    """
+
+    __tablename__ = "checklist_responses"
 
     __table_args__ = (
         db.UniqueConstraint(
             "workflow_task_id",
             "checklist_item_id",
-            name="uq_task_checklist_item_response"
+            name="uq_task_checklist_item_response",
         ),
     )
 
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
+
+    case_id = db.Column(
+        db.Integer,
+        db.ForeignKey("offboarding_cases.id"),
+        nullable=False,
+    )
+
+    workflow_task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("workflow_tasks.id"),
+        nullable=False,
+    )
+
+    checklist_item_id = db.Column(
+        db.Integer,
+        db.ForeignKey("checklist_items.id"),
+        nullable=False,
+    )
+
+    responsible_employee_id = db.Column(
+        db.Integer,
+        db.ForeignKey("department_employees.id"),
+        nullable=False,
+        index=True,
+    )
+
+    response_status = db.Column(
+        db.String(50),
+        nullable=False,
+    )
+
+    response_reason = db.Column(
+        db.Text,
+        nullable=True,
+    )
+
+    responded_by = db.Column(
+        db.String(150),
+        nullable=True,
+    )
+
+    responded_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+    workflow_task = db.relationship(
+        "WorkflowTask",
+        back_populates="responses",
+    )
+
+    checklist_item = db.relationship(
+        "ChecklistItem",
+        back_populates="responses",
+    )
+
+    responsible_employee = db.relationship(
+        "DepartmentEmployee",
+        back_populates="checklist_responses",
+    )
+
+    @property
+    def not_applicable_reason(self):
+        """
+        Temporary compatibility alias for checklist code that still
+        refers to the previous field name.
+
+        Remove this property after the checklist service and display
+        code have been updated to use response_reason.
+        """
+
+        return self.response_reason
+
+    @not_applicable_reason.setter
+    def not_applicable_reason(
+        self,
+        value,
+    ):
+        self.response_reason = value
+
     def __repr__(self):
-        return f"<ChecklistResponse Task={self.workflow_task_id} Item={self.checklist_item_id}>"
+        return (
+            f"<ChecklistResponse "
+            f"Task={self.workflow_task_id} "
+            f"Item={self.checklist_item_id}>"
+        )
 
 
 class AuditLog(db.Model):
     __tablename__ = "audit_logs"
-
+    __table_args__ = (
+        db.Index(
+            "ix_audit_log_case_created_at",
+            "case_id",
+            "created_at",
+        ),
+    )
     id = db.Column(db.Integer, primary_key=True)
 
     case_id = db.Column(
@@ -263,3 +697,37 @@ class AuditLog(db.Model):
 
     def __repr__(self):
         return f"<AuditLog {self.action}>"
+    
+
+class EmailNotification(db.Model):
+    __tablename__ = 'email_notifications'
+    __table_args__=(
+        db.Index("ix_email_notifications_case_status",
+                 "case_id",
+                 "status",),
+        db.Index("ix_email_notifications_task_type",
+                 "workflow_task_id",
+                 "notification_type",),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('offboarding_cases.id'), nullable=False)
+    workflow_task_id = db.Column(db.Integer, db.ForeignKey('workflow_tasks.id'), nullable=False)
+    notification_type = db.Column(db.String(50), nullable=False, default='TASK_ASSIGNED')
+    deduplication_key = db.Column(db.String(255), unique= True, nullable=True)
+    recipient_email = db.Column(db.String(150), nullable=False)
+    subject = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(30), nullable=False, default='PENDING')
+    provider_message_id = db.Column(db.String(255), nullable=True)
+    error_message = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default = utc_now, nullable=False)
+    attempted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    case = db.relationship("OffboardingCase")
+    workflow_task = db.relationship("WorkflowTask", back_populates='notifications')
+
+    def __repr__(self):
+        return (
+            f"EmailNotification"
+            f"Task={self.workflow_task_id}"
+            f"Status={self.status}"
+        )
