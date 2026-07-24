@@ -1,12 +1,35 @@
-thead th {
-    color: var(--aero-header-text);
-    background: var(--aero-table-header-background);
-    border-bottom-color: var(--aero-header-border);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.96),
-        inset 0 -1px 0 rgba(43, 72, 93, 0.12);
+.panel {
+    margin: 0;
+}
+
+
+/*
+ * Structured panel bodies need explicit spacing now that
+ * the legacy global section padding has been neutralized.
+ */
+.panel > .detail-grid {
+    padding: 16px;
+}
+
+.panel > .case-detail-checklists {
+    padding: 16px;
+}
+
+.panel > .audit-timeline {
+    padding: 16px;
+}
+
+
+.panel__heading {
+    padding: 10px 14px;
+}
+
+.panel__heading h2 {
+    margin: 0;
+}
+
+.panel__heading p {
+    margin: 3px 0 0;
+    color: var(--text-secondary);
     font-size: 12px;
-    font-weight: 700;
-    text-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.78);
 }
