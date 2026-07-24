@@ -1,41 +1,71 @@
-<dialog
-    id="checklist-submit-dialog"
-    class="confirmation-dialog"
-    aria-labelledby="checklist-submit-dialog-title"
-    aria-describedby="checklist-submit-dialog-description"
->
-    <header class="confirmation-dialog__header">
-        <h2 id="checklist-submit-dialog-title">
-            Submit checklist?
-        </h2>
-    </header>
+const form = document.querySelector("[data-checklist-form]");
+const dialog = document.querySelector("#checklist-submit-dialog");
 
-    <div class="confirmation-dialog__body">
-        <p id="checklist-submit-dialog-description">
-            The responses will be recorded and the workflow will
-            advance to the next configured phase.
-        </p>
+if (!form) {
+    return;
+}
 
-        <p>
-            Submitted responses cannot currently be edited.
-        </p>
-    </div>
+const submitButton = form.querySelector(
+    'input[type="submit"], button[type="submit"]'
+);
 
-    <footer class="confirmation-dialog__actions">
-        <button
-            type="button"
-            class="btn-secondary"
-            data-dialog-cancel
-        >
-            Go Back and Review
-        </button>
+const cancelButton = dialog?.querySelector(
+    "[data-dialog-cancel]"
+);
 
-        <button
-            type="button"
-            class="btn-primary"
-            data-dialog-confirm
-        >
-            Submit Checklist
-        </button>
-    </footer>
-</dialog>
+const confirmButton = dialog?.querySelector(
+    "[data-dialog-confirm]"
+);
+
+let submissionConfirmed = false;
+
+form.addEventListener("submit", (event) => {
+    if (submissionConfirmed) {
+        return;
+    }
+
+    if (
+        dialog
+        && typeof dialog.showModal === "function"
+    ) {
+        event.preventDefault();
+        dialog.showModal();
+        cancelButton?.focus();
+        return;
+    }
+
+    /*
+     * Fallback for a browser without <dialog> support.
+     */
+    const confirmed = window.confirm(
+        "Submit this checklist? The responses cannot currently be edited."
+    );
+
+    if (!confirmed) {
+        event.preventDefault();
+    }
+});
+
+cancelButton?.addEventListener("click", () => {
+    dialog.close();
+    submitButton?.focus();
+});
+
+confirmButton?.addEventListener("click", () => {
+    submissionConfirmed = true;
+
+    confirmButton.disabled = true;
+    confirmButton.textContent = "Submitting…";
+
+    dialog.close();
+
+    if (typeof form.requestSubmit === "function") {
+        form.requestSubmit(submitButton);
+    } else {
+        form.submit();
+    }
+});
+
+dialog?.addEventListener("cancel", () => {
+    submitButton?.focus();
+});
