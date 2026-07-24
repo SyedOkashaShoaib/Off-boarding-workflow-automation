@@ -12,7 +12,6 @@ function synchronizeChecklistItem(
     checklistItem,
     {
         clearReasonForYes = false,
-        focusReason = false,
     } = {}
 ) {
     const responseInputs = Array.from(
@@ -94,15 +93,15 @@ function synchronizeChecklistItem(
     if (reasonLabel) {
         if (selectedValue === "NO") {
             reasonLabel.textContent =
-                "Reason for No";
+                "Reason the action was not completed";
         } else if (
             selectedValue === "NOT_APPLICABLE"
         ) {
             reasonLabel.textContent =
-                "Reason for Not applicable";
+                "Reason the action does not apply";
         } else {
             reasonLabel.textContent =
-                "Reason or explanation";
+                "Reason";
         }
     }
 
@@ -122,13 +121,7 @@ function synchronizeChecklistItem(
         }
     }
 
-    if (
-        reasonRequired
-        && focusReason
-        && !reasonInput.disabled
-    ) {
-        reasonInput.focus();
-    }
+
 }
 
 checklistItems.forEach((checklistItem) => {
@@ -154,11 +147,11 @@ checklistItems.forEach((checklistItem) => {
                     checklistItem,
                     {
                         clearReasonForYes: true,
-                        focusReason: (
-                            input.value === "NO"
-                            || input.value
-                                === "NOT_APPLICABLE"
-                        ),
+                        // focusReason: (
+                        //     input.value === "NO"
+                        //     || input.value
+                        //         === "NOT_APPLICABLE"
+                        // ),
                     }
                 );
             }
