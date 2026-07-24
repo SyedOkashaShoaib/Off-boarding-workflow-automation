@@ -1,36 +1,40 @@
-/* Shared Aero-style header surfaces */
---aero-header-top: #f9fcfe;
---aero-header-middle: #edf5fa;
---aero-header-bottom: #dce8f1;
---aero-header-border: var(--border-medium);
---aero-header-text: #29485d;
+/* ============================================================
+   Shared structured panels and Aero headers
+   ============================================================ */
 
---aero-panel-header-background:
-    radial-gradient(
-        145% 120% at 50% -55%,
-        rgba(255, 255, 255, 0.98) 0%,
-        rgba(255, 255, 255, 0.76) 37%,
-        rgba(255, 255, 255, 0.20) 59%,
-        rgba(255, 255, 255, 0) 72%
-    ),
-    linear-gradient(
-        to bottom,
-        var(--aero-header-top) 0%,
-        var(--aero-header-middle) 48%,
-        var(--aero-header-bottom) 100%
-    );
+/*
+ * These components already provide their own body padding.
+ * Reset the legacy global <section> padding so their headers
+ * can meet the outer panel border.
+ */
+.information-card,
+.checklist-section,
+.panel,
+.checklist-record {
+    padding: 0;
+    overflow: hidden;
+}
 
---aero-table-header-background:
-    linear-gradient(
-        to bottom,
-        rgba(255, 255, 255, 0.84) 0%,
-        rgba(255, 255, 255, 0.42) 42%,
-        rgba(255, 255, 255, 0.10) 43%,
-        rgba(255, 255, 255, 0) 100%
-    ),
-    linear-gradient(
-        to bottom,
-        var(--aero-header-top) 0%,
-        var(--aero-header-middle) 50%,
-        var(--aero-header-bottom) 100%
-    );
+
+/*
+ * Visual treatment only. Individual page styles remain
+ * responsible for flex/grid layout and component-specific spacing.
+ */
+.confirmation-heading,
+.information-card__header,
+.assignment-details > h2,
+.checklist-section__header,
+.case-filter-panel__heading,
+.case-register-panel__heading,
+.panel__heading,
+.checklist-record__heading {
+    color: var(--aero-header-text);
+    background: var(--aero-panel-header-background);
+    border-bottom: 1px solid var(--aero-header-border);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.98),
+        inset 0 -1px 0 rgba(43, 72, 93, 0.13),
+        0 1px 2px rgba(44, 75, 96, 0.08);
+    text-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.84);
+}
