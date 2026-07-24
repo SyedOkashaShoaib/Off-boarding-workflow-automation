@@ -119,13 +119,6 @@
 .case-filter-panel__heading,
 .case-register-panel__heading {
     padding: 10px 14px;
-    background:
-        linear-gradient(
-            to bottom,
-            #f9fcfe,
-            #dce8f1
-        );
-    border-bottom: 1px solid var(--border-medium);
 }
 
 
@@ -428,6 +421,23 @@
 /* ============================================================
    Case detail foundation
    ============================================================ */
+.panel { margin: 0; }
+
+/*
+
+    Structured panel bodies need explicit spacing now that
+    the legacy global section padding has been neutralized. */ 
+.panel > .detail-grid { padding: 16px; }
+
+.panel > .case-detail-checklists { padding: 16px; }
+
+.panel > .audit-timeline { padding: 16px; }
+
+.panel__heading { padding: 10px 14px; }
+
+.panel__heading h2 { margin: 0; }
+
+.panel__heading p { margin: 3px 0 0; color: var(--text-secondary); font-size: 12px; }
 
 .case-detail-page {
     display: grid;
@@ -478,9 +488,17 @@
 
 .case-detail-checklists { display: grid; gap: 16px; }
 
-.checklist-record { overflow: hidden; border: 1px solid var(--border-light); border-radius: var(--radius-medium); }
+.checklist-record { 
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #ffffff;
+    border:1px solid
+    var(--border-light);
+    border-radius: var(--radius-medium);
+ }
 
-.checklist-record__heading { display: grid; grid-template-columns: minmax(180px, 1fr) auto auto; align-items: center; gap: 16px 24px; padding: 11px 14px; background: linear-gradient( to bottom, #f6fafc, #e7eff4 ); border-bottom: 1px solid var(--border-light); }
+.checklist-record__heading { display: grid; grid-template-columns: minmax(180px, 1fr) auto auto; align-items: center; gap: 16px 24px; padding: 11px 14px;  }
 
 .checklist-record__identity { min-width: 0; }
 

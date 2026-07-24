@@ -188,13 +188,6 @@
 .assignment-details > h2 {
     margin: 0;
     padding: 10px 14px;
-    background:
-        linear-gradient(
-            to bottom,
-            #f9fcfe,
-            #dce8f1
-        );
-    border-bottom: 1px solid var(--border-medium, #9fb0bd);
 }
 
 .information-card__header h2,
@@ -328,13 +321,6 @@
     justify-content: space-between;
     gap: 16px;
     padding: 11px 14px;
-    background:
-        linear-gradient(
-            to bottom,
-            #f9fcfe,
-            #dce8f1
-        );
-    border-bottom: 1px solid var(--border-medium, #9fb0bd);
 }
 
 .checklist-section__eyebrow {
