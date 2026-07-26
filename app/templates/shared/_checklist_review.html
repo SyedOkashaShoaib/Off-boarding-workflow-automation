@@ -1,8 +1,28 @@
 {% macro render_checklist_review(
     task,
-    task_status_labels,
-    response_status_labels
+    task_status_labels=None,
+    response_status_labels=None
 ) %}
+    {% set resolved_task_status_labels = (
+        task_status_labels
+        | default({
+            "PENDING": "Pending",
+            "IN_PROGRESS": "In Progress",
+            "SUBMITTED": "Submitted",
+            "COMPLETED": "Completed",
+            "APPROVED": "Approved"
+        }, true)
+    ) %}
+
+    {% set resolved_response_status_labels = (
+        response_status_labels
+        | default({
+            "YES": "Yes",
+            "NO": "No",
+            "NOT_APPLICABLE": "Not Applicable"
+        }, true)
+    ) %}
+
     {% set sorted_responses = (
         task.responses
         | sort(attribute="checklist_item.display_order")
@@ -84,7 +104,7 @@
                 "
             >
                 {{
-                    task_status_labels.get(
+                    resolved_task_status_labels.get(
                         task.status,
                         task.status
                         | replace("_", " ")
@@ -211,7 +231,7 @@
                                         "
                                     >
                                         {{
-                                            response_status_labels.get(
+                                            resolved_response_status_labels.get(
                                                 response.response_status,
                                                 response.response_status
                                                 | replace("_", " ")

@@ -1,273 +1,539 @@
 {% extends "layouts/task_base.html" %}
+
+{% from
+    "shared/_checklist_review.html"
+    import render_checklist_review
+%}
+{% set case_status_labels = {
+    "CREATED": "Created",
+    "IN_PROGRESS": "In Progress",
+    "CLOSED": "Closed"
+} %}
+
+{% set task_status_labels = {
+    "PENDING": "Pending",
+    "IN_PROGRESS": "In Progress",
+    "SUBMITTED": "Submitted",
+    "COMPLETED": "Completed",
+    "APPROVED": "Approved"
+} %}
+
+{% set response_status_labels = {
+    "YES": "Yes",
+    "NO": "No",
+    "NOT_APPLICABLE": "Not Applicable"
+} %}
+
 {% block title %}
     {{ task.case.case_number }} · Final Approval
 {% endblock %}
-{% block content %}
 
-<section>
+
+{% block head %}
+    {{ super() }}
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for(
+            'static',
+            filename='css/components/checklist_review.css'
+        ) }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for(
+            'static',
+            filename='css/pages/admin_approval.css'
+        ) }}"
+    >
+{% endblock %}
+
+
+{% block breadcrumbs %}
+    <nav
+        class="approval-breadcrumbs"
+        aria-label="Breadcrumb"
+    >
+        <ol>
+            <li>Operations</li>
+
+            <li aria-current="page">
+                Final Approval
+            </li>
+        </ol>
+    </nav>
+{% endblock %}
+
+
+{% block page_header %}
     <h1>Admin Final Approval</h1>
 
     <p>
-        Review the completed departmental clearances before
+        Review all departmental clearance evidence before
         closing the offboarding case.
     </p>
-</section>
+{% endblock %}
 
 
-<section>
-    <h2>Case Details</h2>
+{% block content %}
+    {% set case_status_labels = {
+        "CREATED": "Created",
+        "IN_PROGRESS": "In Progress",
+        "CLOSED": "Closed"
+    } %}
 
-    <p>
-        <strong>Case Number:</strong>
-        {{ task.case.case_number }}
-    </p>
+    {% set task_status_labels = {
+        "PENDING": "Pending",
+        "IN_PROGRESS": "In Progress",
+        "SUBMITTED": "Submitted",
+        "COMPLETED": "Completed",
+        "APPROVED": "Approved"
+    } %}
 
-    <p>
-        <strong>Employee Name:</strong>
-        {{ task.case.employee_name }}
-    </p>
+    {% set response_status_labels = {
+        "YES": "Yes",
+        "NO": "No",
+        "NOT_APPLICABLE": "Not Applicable"
+    } %}
 
-    <p>
-        <strong>Employee ID:</strong>
-        {{ task.case.employee_id }}
-    </p>
-
-    <p>
-        <strong>Designation:</strong>
-        {{ task.case.designation }}
-    </p>
-
-    <p>
-        <strong>Employee Department:</strong>
-        {{ task.case.department }}
-    </p>
-
-    <p>
-        <strong>Line Manager:</strong>
-        {{ task.case.line_manager }}
-    </p>
-
-    <p>
-        <strong>Last Working Day:</strong>
-        {{ task.case.last_working_day.strftime(
-            "%d %B %Y"
-        ) }}
-    </p>
-
-    <p>
-        <strong>Case Status:</strong>
-        {{ task.case.status }}
-    </p>
-</section>
-
-
-<section>
-    <h2>Final Approval Task</h2>
-
-    <p>
-        <strong>Responsible Department:</strong>
-        {{ task.phase.department.name }}
-    </p>
-
-    <p>
-        <strong>Assigned Email:</strong>
-        {{ task.assigned_to_email }}
-    </p>
-
-    <p>
-        <strong>Task Status:</strong>
-        {{ task.status }}
-    </p>
-
-    <p>
-        <strong>Assigned At:</strong>
-        {{ task.assigned_at.strftime(
-            "%d %B %Y, %I:%M %p"
-        ) }}
-    </p>
-
-    <p>
-        <strong>Opened At:</strong>
-
-        {% if task.opened_at %}
-            {{ task.opened_at.strftime(
-                "%d %B %Y, %I:%M %p"
-            ) }}
-        {% else %}
-            Not recorded
-        {% endif %}
-    </p>
-</section>
-
-
-<section>
-    <h2>Departmental Clearance Summary</h2>
-
-    {% if prior_tasks %}
-
-        <table>
-
-            <thead>
-                <tr>
-                    <th>Phase</th>
-                    <th>Department</th>
-                    <th>Task Status</th>
-                    <th>Submitted At</th>
-                    <th>Responses</th>
-                </tr>
-            </thead>
-
-            <tbody>
-
-                {% for prior_task in prior_tasks %}
-
-                    <tr>
-                        <td>
-                            {{ prior_task.phase.name }}
-                        </td>
-
-                        <td>
-                            {{ prior_task.phase.department.name }}
-                        </td>
-
-                        <td>
-                            {{ prior_task.status }}
-                        </td>
-
-                        <td>
-                            {% if prior_task.submitted_at %}
-                                {{ prior_task.submitted_at.strftime(
-                                    "%d %B %Y, %I:%M %p"
-                                ) }}
-                            {% else %}
-                                Not submitted
-                            {% endif %}
-                        </td>
-
-                        <td>
-                            {{ prior_task.responses | length }}
-                        </td>
-                    </tr>
-
-                {% endfor %}
-
-            </tbody>
-
-        </table>
-
-    {% else %}
-
-        <p>
-            No previous departmental tasks were found.
-        </p>
-
-    {% endif %}
-</section>
-
-
-{% if completion_issues %}
-
-    <section>
-        <h2>Approval Blocked</h2>
-
-        <p>
-            The case cannot be closed because the following
-            workflow requirements are incomplete:
-        </p>
-
-        <ul>
-            {% for issue in completion_issues %}
-                <li>{{ issue }}</li>
-            {% endfor %}
-        </ul>
-    </section>
-
-{% endif %}
-
-
-{% if case_is_closed %}
-
-    <section>
-        <h2>Case Closed</h2>
-
-        <p>
-            This offboarding case has received final approval
-            and is now closed.
-        </p>
-
-        <p>
-            <strong>Closed At:</strong>
-
-            {% if task.case.closed_at %}
-                {{ task.case.closed_at.strftime(
-                    "%d %B %Y, %I:%M %p"
-                ) }}
-            {% else %}
-                Not recorded
-            {% endif %}
-        </p>
-
-        <p>
-            <strong>Final Task Status:</strong>
-            {{ task.status }}
-        </p>
-    </section>
-
-{% elif not completion_issues %}
-
-    <section>
-        <h2>Grant Final Approval</h2>
-
-        <form
-            method="post"
-            action="{{ url_for(
-                'workflow.admin_approval',
-                task_id=task.id
-            ) }}"
+    <div class="admin-approval-page">
+        <section
+            class="admin-approval-panel"
+            aria-labelledby="case-information-title"
         >
+            <header class="admin-approval-panel__heading">
+                <h2 id="case-information-title">
+                    Offboarding Case Information
+                </h2>
+            </header>
 
-            {{ form.hidden_tag() }}
+            <dl class="admin-detail-grid">
+                <div>
+                    <dt>Case Number</dt>
+                    <dd>{{ task.case.case_number }}</dd>
+                </div>
 
-            <div>
-                {{ form.clearance_confirmed() }}
+                <div>
+                    <dt>Case Status</dt>
 
-                {{ form.clearance_confirmed.label }}
+                    <dd>
+                        <span
+                            class="
+                                status-badge
+                                {% if (
+                                    task.case.status
+                                    == 'CLOSED'
+                                ) %}
+                                    status-success
+                                {% endif %}
+                            "
+                        >
+                            {{
+                                case_status_labels.get(
+                                    task.case.status,
+                                    task.case.status
+                                    | replace("_", " ")
+                                    | title
+                                )
+                            }}
+                        </span>
+                    </dd>
+                </div>
 
-                {% for error in
-                    form.clearance_confirmed.errors %}
+                <div>
+                    <dt>Employee Name</dt>
+                    <dd>{{ task.case.employee_name }}</dd>
+                </div>
+
+                <div>
+                    <dt>Employee ID</dt>
+                    <dd>{{ task.case.employee_id }}</dd>
+                </div>
+
+                <div>
+                    <dt>Designation</dt>
+                    <dd>{{ task.case.designation }}</dd>
+                </div>
+
+                <div>
+                    <dt>Employee Department</dt>
+                    <dd>{{ task.case.department }}</dd>
+                </div>
+
+                <div>
+                    <dt>Line Manager</dt>
+
+                    <dd>
+                        {{
+                            task.case.line_manager
+                            or "Not recorded"
+                        }}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Last Working Day</dt>
+
+                    <dd>
+                        {% if task.case.last_working_day %}
+                            {{
+                                task.case
+                                .last_working_day
+                                .strftime("%d %B %Y")
+                            }}
+                        {% else %}
+                            Not recorded
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+        </section>
+
+
+        <section
+            class="admin-approval-panel"
+            aria-labelledby="approval-assignment-title"
+        >
+            <header class="admin-approval-panel__heading">
+                <h2 id="approval-assignment-title">
+                    Final Approval Assignment
+                </h2>
+            </header>
+
+            <dl class="admin-detail-grid">
+                <div>
+                    <dt>Responsible Department</dt>
+
+                    <dd>
+                        {{ task.phase.department.name }}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Assigned Email</dt>
+
+                    <dd>
+                        {{ task.assigned_to_email }}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Task Status</dt>
+
+                    <dd>
+                        <span
+                            class="
+                                status-badge
+                                {% if (
+                                    task.status
+                                    == 'APPROVED'
+                                ) %}
+                                    status-success
+                                {% endif %}
+                            "
+                        >
+                            {{
+                                task_status_labels.get(
+                                    task.status,
+                                    task.status
+                                    | replace("_", " ")
+                                    | title
+                                )
+                            }}
+                        </span>
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Assigned At</dt>
+
+                    <dd>
+                        {% if task.assigned_at %}
+                            {{
+                                task.assigned_at.strftime(
+                                    "%d %B %Y, %I:%M %p"
+                                )
+                            }}
+                        {% else %}
+                            Not recorded
+                        {% endif %}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Opened At</dt>
+
+                    <dd>
+                        {% if task.opened_at %}
+                            {{
+                                task.opened_at.strftime(
+                                    "%d %B %Y, %I:%M %p"
+                                )
+                            }}
+                        {% else %}
+                            Not recorded
+                        {% endif %}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Due At</dt>
+
+                    <dd>
+                        {% if task.due_at %}
+                            {{
+                                task.due_at.strftime(
+                                    "%d %B %Y, %I:%M %p"
+                                )
+                            }}
+                        {% else %}
+                            Not assigned
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+        </section>
+
+
+        <section
+            class="admin-approval-panel"
+            aria-labelledby="clearance-review-title"
+        >
+            <header class="admin-approval-panel__heading">
+                <h2 id="clearance-review-title">
+                    Departmental Clearance Review
+                </h2>
+
+                <p>
+                    Review every recorded response before granting
+                    final approval.
+                </p>
+            </header>
+
+            {% if prior_tasks %}
+                <div class="checklist-records">
+                    {% for prior_task in prior_tasks %}
+                        {{
+                            render_checklist_review(
+                                task=prior_task,
+                                task_status_labels=task_status_labels,
+                                response_status_labels=response_status_labels
+                            )
+                        }}
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="admin-approval-empty">
+                    No previous departmental tasks were found.
+                </div>
+            {% endif %}
+        </section>
+
+
+        {% if completion_issues %}
+            <section
+                class="
+                    approval-notice
+                    approval-notice--error
+                "
+                role="alert"
+                aria-labelledby="approval-blocked-title"
+            >
+                <h2 id="approval-blocked-title">
+                    Approval Blocked
+                </h2>
+
+                <p>
+                    The case cannot be closed because the following
+                    workflow requirements are incomplete:
+                </p>
+
+                <ul>
+                    {% for issue in completion_issues %}
+                        <li>{{ issue }}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endif %}
+
+
+        {% if case_is_closed %}
+            <section
+                class="
+                    approval-notice
+                    approval-notice--success
+                "
+                role="status"
+                aria-labelledby="case-closed-title"
+            >
+                <h2 id="case-closed-title">
+                    Case Closed
+                </h2>
+
+                <p>
+                    This offboarding case has received final
+                    approval and is now closed.
+                </p>
+
+                <p>
+                    <strong>Closed At:</strong>
+
+                    {% if task.case.closed_at %}
+                        {{
+                            task.case.closed_at.strftime(
+                                "%d %B %Y, %I:%M %p"
+                            )
+                        }}
+                    {% else %}
+                        Not recorded
+                    {% endif %}
+                </p>
+
+                <p>
+                    <strong>Final Task Status:</strong>
+
+                    {{
+                        task_status_labels.get(
+                            task.status,
+                            task.status
+                            | replace("_", " ")
+                            | title
+                        )
+                    }}
+                </p>
+            </section>
+
+        {% elif not completion_issues %}
+            <section
+                class="admin-approval-panel"
+                aria-labelledby="grant-approval-title"
+            >
+                <header class="admin-approval-panel__heading">
+                    <h2 id="grant-approval-title">
+                        Grant Final Approval
+                    </h2>
+
                     <p>
-                        <strong>{{ error }}</strong>
+                        Confirm your review and close the
+                        offboarding case.
                     </p>
-                {% endfor %}
-            </div>
+                </header>
 
-            <div>
-                {{ form.remarks.label }}
+                <form
+                    class="approval-form"
+                    method="post"
+                    action="{{ url_for(
+                        'workflow.admin_approval',
+                        task_id=task.id
+                    ) }}"
+                >
+                    {{ form.hidden_tag() }}
 
-                <br>
+                    <div class="approval-confirmation">
+                        {{
+                            form.clearance_confirmed(
+                                class_="
+                                    approval-confirmation__checkbox
+                                "
+                            )
+                        }}
 
-                {{ form.remarks(
-                    rows=5,
-                    maxlength=2000
-                ) }}
+                        <div>
+                            {{
+                                form.clearance_confirmed.label(
+                                    class_="
+                                        approval-confirmation__label
+                                    "
+                                )
+                            }}
 
-                {% for error in form.remarks.errors %}
-                    <p>
-                        <strong>{{ error }}</strong>
-                    </p>
-                {% endfor %}
-            </div>
+                            <p
+                                class="
+                                    approval-confirmation__help
+                                "
+                            >
+                                Confirm only after reviewing each
+                                departmental checklist above.
+                            </p>
 
-            <p>
-                Approving this task will permanently mark the
-                offboarding case as closed.
-            </p>
+                            {% for error in (
+                                form
+                                .clearance_confirmed
+                                .errors
+                            ) %}
+                                <p
+                                    class="approval-form__error"
+                                    role="alert"
+                                >
+                                    {{ error }}
+                                </p>
+                            {% endfor %}
+                        </div>
+                    </div>
 
-            {{ form.submit() }}
+                    <div class="approval-form__field">
+                        {{
+                            form.remarks.label(
+                                class_="form-label"
+                            )
+                        }}
 
-        </form>
-    </section>
+                        {{
+                            form.remarks(
+                                class_="
+                                    approval-form__textarea
+                                ",
+                                rows=5,
+                                maxlength=2000,
+                                aria_describedby=(
+                                    "approval-remarks-help"
+                                )
+                            )
+                        }}
 
-{% endif %}
+                        <p
+                            class="approval-form__help"
+                            id="approval-remarks-help"
+                        >
+                            Optional. Record any final observations
+                            relevant to the closure decision.
+                        </p>
 
+                        {% for error in form.remarks.errors %}
+                            <p
+                                class="approval-form__error"
+                                role="alert"
+                            >
+                                {{ error }}
+                            </p>
+                        {% endfor %}
+                    </div>
+
+                    <div
+                        class="approval-form__warning"
+                        role="note"
+                    >
+                        <strong>Permanent action</strong>
+
+                        <p>
+                            Granting approval will permanently mark
+                            this offboarding case as closed.
+                        </p>
+                    </div>
+
+                    <div class="approval-form__actions">
+                        {{
+                            form.submit(
+                                class_="
+                                    btn-primary
+                                    approval-submit-button
+                                "
+                            )
+                        }}
+                    </div>
+                </form>
+            </section>
+        {% endif %}
+    </div>
 {% endblock %}
