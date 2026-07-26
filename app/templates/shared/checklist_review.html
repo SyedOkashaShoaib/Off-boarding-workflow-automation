@@ -1,0 +1,313 @@
+{% macro render_checklist_review(
+    task,
+    task_status_labels,
+    response_status_labels
+) %}
+    {% set sorted_responses = (
+        task.responses
+        | sort(attribute="checklist_item.display_order")
+    ) %}
+
+    {% set submission_response = (
+        sorted_responses | first
+    ) %}
+
+    {% set submission_time = task.submitted_at %}
+
+    {% if not submission_time and submission_response %}
+        {% set submission_time = (
+            submission_response.responded_at
+        ) %}
+    {% endif %}
+
+    <section
+        class="checklist-record"
+        aria-labelledby="checklist-record-title-{{ task.id }}"
+    >
+        <header class="checklist-record__heading">
+            <div class="checklist-record__identity">
+                <h3 id="checklist-record-title-{{ task.id }}">
+                    {{ task.phase.department.name }}
+                </h3>
+
+                <p>
+                    {{ task.phase.name }}
+                </p>
+            </div>
+
+            <dl class="checklist-record__metadata">
+                <div>
+                    <dt>Submitted by</dt>
+
+                    <dd>
+                        {% if (
+                            submission_response
+                            and submission_response.responded_by
+                        ) %}
+                            {{
+                                submission_response.responded_by
+                            }}
+                        {% elif task.assigned_to_email %}
+                            {{ task.assigned_to_email }}
+                        {% else %}
+                            Not recorded
+                        {% endif %}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt>Submitted at</dt>
+
+                    <dd>
+                        {% if submission_time %}
+                            {{
+                                submission_time.strftime(
+                                    "%d %b %Y, %I:%M %p"
+                                )
+                            }}
+                        {% else %}
+                            Not recorded
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+
+            <span
+                class="
+                    register-status
+                    register-status--task
+                    register-status--{{ task.status | lower }}
+                    checklist-record__status
+                    checklist-record__status--{{
+                        task.status | lower
+                    }}
+                "
+            >
+                {{
+                    task_status_labels.get(
+                        task.status,
+                        task.status
+                        | replace("_", " ")
+                        | title
+                    )
+                }}
+            </span>
+        </header>
+
+        {% if sorted_responses %}
+            <div
+                class="
+                    case-table-scroll
+                    checklist-record__table-scroll
+                "
+                tabindex="0"
+                role="region"
+                aria-label="{{
+                    task.phase.name
+                }} checklist results"
+            >
+                <table
+                    class="
+                        case-register-table
+                        checklist-record-table
+                    "
+                >
+                    <colgroup>
+                        <col
+                            class="
+                                checklist-record-table__item-column
+                            "
+                        >
+
+                        <col
+                            class="
+                                checklist-record-table__result-column
+                            "
+                        >
+
+                        <col
+                            class="
+                                checklist-record-table__reason-column
+                            "
+                        >
+
+                        <col
+                            class="
+                                checklist-record-table__employee-column
+                            "
+                        >
+                    </colgroup>
+
+                    <thead>
+                        <tr>
+                            <th scope="col">
+                                Checklist Item
+                            </th>
+
+                            <th scope="col">
+                                Result
+                            </th>
+
+                            <th scope="col">
+                                Reason
+                            </th>
+
+                            <th scope="col">
+                                Responsible Employee
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for response in sorted_responses %}
+                            {% set reason_text = (
+                                response.response_reason
+                                | default("", true)
+                                | trim
+                            ) %}
+
+                            {% set responsible_employee = (
+                                response.responsible_employee
+                            ) %}
+
+                            <tr>
+                                <td>
+                                    {% if (
+                                        response
+                                        .checklist_item
+                                        .section
+                                    ) %}
+                                        <span
+                                            class="
+                                                checklist-item-section
+                                            "
+                                        >
+                                            {{
+                                                response
+                                                .checklist_item
+                                                .section
+                                            }}
+                                        </span>
+                                    {% endif %}
+
+                                    <strong>
+                                        {{
+                                            response
+                                            .checklist_item
+                                            .item_text
+                                        }}
+                                    </strong>
+                                </td>
+
+                                <td>
+                                    <span
+                                        class="
+                                            checklist-result
+                                            checklist-result--{{
+                                                response
+                                                .response_status
+                                                | lower
+                                            }}
+                                        "
+                                    >
+                                        {{
+                                            response_status_labels.get(
+                                                response.response_status,
+                                                response.response_status
+                                                | replace("_", " ")
+                                                | title
+                                            )
+                                        }}
+                                    </span>
+                                </td>
+
+                                <td
+                                    class="
+                                        checklist-reason-cell
+                                    "
+                                >
+                                    {% if (
+                                        response.response_status
+                                        == "YES"
+                                    ) %}
+                                        <span
+                                            class="table-empty-value"
+                                            aria-label="
+                                                No reason required
+                                            "
+                                            title="
+                                                No reason required
+                                            "
+                                        >
+                                            &mdash;
+                                        </span>
+                                    {% elif reason_text %}
+                                        <span
+                                            class="
+                                                checklist-reason-text
+                                            "
+                                        >
+                                            {{ reason_text }}
+                                        </span>
+                                    {% else %}
+                                        <span
+                                            class="table-empty-value"
+                                        >
+                                            Not recorded
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                                <td
+                                    class="
+                                        checklist-responsible-employee
+                                    "
+                                >
+                                    {% if responsible_employee %}
+                                        <strong
+                                            class="
+                                                checklist-responsible-employee__name
+                                            "
+                                        >
+                                            {{
+                                                responsible_employee
+                                                .full_name
+                                            }}
+                                        </strong>
+
+                                        {% if (
+                                            responsible_employee
+                                            .employee_code
+                                        ) %}
+                                            <span
+                                                class="
+                                                    checklist-responsible-employee__code
+                                                "
+                                            >
+                                                {{
+                                                    responsible_employee
+                                                    .employee_code
+                                                }}
+                                            </span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span
+                                            class="table-empty-value"
+                                        >
+                                            Not recorded
+                                        </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="checklist-record__empty">
+                No checklist responses were recorded for this
+                departmental task.
+            </div>
+        {% endif %}
+    </section>
+{% endmacro %}
