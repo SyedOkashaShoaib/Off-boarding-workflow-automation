@@ -71,6 +71,13 @@ def get_case_detail_record(
             selectinload(
                 OffboardingCase.tasks
             ).selectinload(
+                WorkflowTask.responses
+            ).joinedload(
+                ChecklistResponse.responsible_employee
+            ),
+            selectinload(
+                OffboardingCase.tasks
+            ).selectinload(
                 WorkflowTask.notifications
             ),
             selectinload(

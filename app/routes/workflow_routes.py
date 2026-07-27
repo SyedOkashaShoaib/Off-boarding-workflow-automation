@@ -10,6 +10,10 @@ from flask import (
 from flask import abort
 from flask_login import current_user
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import (
+    joinedload,
+    selectinload,
+)
 
 from app.extension import db
 from app.forms.workflow_forms import (
@@ -22,6 +26,8 @@ from app.models import (
     utc_now,
     ROLE_NOC_OPERATOR,
     ROLE_SYSTEM_ADMIN,
+    ChecklistResponse,
+    WorkflowPhase,
 )
 from app.services.checklist_service import (
     ChecklistSubmissionError,
@@ -620,8 +626,22 @@ def admin_approval(task_id):
     database transaction.
     """
 
-    task = WorkflowTask.query.get_or_404(
-        task_id
+    task = (
+        WorkflowTask.query
+        .options(
+            joinedload(
+                WorkflowTask.phase
+            ).joinedload(
+                WorkflowPhase.department
+             ),
+            joinedload(
+                WorkflowTask.case
+            ),
+        )
+        .filter(
+            WorkflowTask.id == task_id
+        )
+        .first_or_404()
     )
 
     if not task.phase.is_final_approval:
@@ -679,19 +699,40 @@ def admin_approval(task_id):
     # Approval-page information
     # --------------------------------------------------------
 
-    prior_tasks = sorted(
-        [
-            case_task
-            for case_task in task.case.tasks
-            if (
-                case_task.phase.phase_order
-                < task.phase.phase_order
-            )
-        ],
-        key=lambda case_task: (
-            case_task.phase.phase_order,
-            case_task.id,
-        ),
+    prior_tasks = (
+        WorkflowTask.query
+        .join(
+            WorkflowPhase,
+            WorkflowTask.phase_id
+            == WorkflowPhase.id,
+        )
+        .options(
+            joinedload(
+                WorkflowTask.phase
+            ).joinedload(
+                WorkflowPhase.department
+            ),
+            selectinload(
+                WorkflowTask.responses
+            ).joinedload(
+                ChecklistResponse.checklist_item
+            ),
+            selectinload(
+                WorkflowTask.responses
+            ).joinedload(
+                ChecklistResponse.responsible_employee
+            ),
+        )
+        .filter(
+            WorkflowTask.case_id == task.case_id,
+            WorkflowPhase.phase_order
+            < task.phase.phase_order,
+        )
+        .order_by(
+            WorkflowPhase.phase_order.asc(),
+            WorkflowTask.id.asc(),
+        )
+        .all()
     )
 
     completion_issues = (
