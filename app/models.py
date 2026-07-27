@@ -731,3 +731,15 @@ class EmailNotification(db.Model):
             f"Task={self.workflow_task_id}"
             f"Status={self.status}"
         )
+
+class EmployeeDepartment(db.Model):
+    """Department of the employee being kicked out. This is different from the departments taht participate
+    in the offboarding workflow"""
+    __tablename__ = 'employee_departments'
+    id = db.Column(db.Integer, primary_key= True,)
+    name= db.Column(db.String(150), unique=True, nullable=False, index=True,)
+    is_active=db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+    def __repr__(self):
+        return f"<EmployeeDepartment {self.name}>"

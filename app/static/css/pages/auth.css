@@ -131,15 +131,17 @@
 
 
 .login-actions {
-    display: flex;
-    justify-content: flex-end;
     margin-top: 20px;
     padding-top: 15px;
     border-top: 1px solid var(--border-light);
 }
+.login-actions .btn-primary {
+    display: block;
+    width:100%;
+    text-align: center;
+}
 
-
-.department-access-guidance {
+/* .department-access-guidance {
     margin-top: 22px;
     padding: 13px 14px;
     color: var(--info-text);
@@ -159,7 +161,7 @@
 .department-access-guidance p {
     margin: 0;
     font-size: 12px;
-}
+} */
 
 
 .authentication-window__footer {

@@ -31,6 +31,7 @@ from app.models import (
     WorkflowTask,
     ROLE_NOC_OPERATOR,
     ROLE_SYSTEM_ADMIN,
+    EmployeeDepartment,
 )
 from app.services.case_detail_service import (
     get_case_detail_record,
@@ -80,19 +81,24 @@ def generate_case_number() -> str:
     next_number = 1 if latest_case is None else latest_case.id + 1
 
     return f"OFF-{current_year}-{next_number:04d}"
-
+def populate_employee_department_choices(form: Case_Form, )->None:
+    departments= EmployeeDepartment.query.filter_by(is_active=True).order_by(EmployeeDepartment.name.asc()).all()
+    form.emp_dep_choices= [(0, "Select an employee department")] + [(department.id, department.name) for department in departments]
 
 @case_bp.route("/create", methods=["GET", "POST"])
 @login_required
 def create_case():
     form = Case_Form()
-
+    populate_employee_department_choices(form)
     if not form.validate_on_submit():
         return render_template(
             "create_case.html",
             form=form,
         )
-
+    selected_department = db.session.get(EmployeeDepartment, form.emp_dep.data)
+    if (selected_department is None or not selected_department.is_active):
+        form.emp_dep.errors.append("Select a valid active employee department")
+        return render_template("create_case.html", form=form,)
     try:
         new_case = OffboardingCase(
             case_number=generate_case_number(),

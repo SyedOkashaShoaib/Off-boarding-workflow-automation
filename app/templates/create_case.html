@@ -18,7 +18,10 @@
     </p>
     <p>
         {{ form.emp_dep.label }}<br>
-        {{ form.emp_dep(size=32) }}
+        {{ form.emp_dep }}
+        {% for error in form.emp_dep.errors %}
+            <span class="field-error">{{ error }}</span>
+        {% endfor %} 
     </p>
     <p>
         {{ form.last_date.label }}<br>
