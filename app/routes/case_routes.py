@@ -83,7 +83,7 @@ def generate_case_number() -> str:
     return f"OFF-{current_year}-{next_number:04d}"
 def populate_employee_department_choices(form: Case_Form, )->None:
     departments= EmployeeDepartment.query.filter_by(is_active=True).order_by(EmployeeDepartment.name.asc()).all()
-    form.emp_dep_choices= [(0, "Select an employee department")] + [(department.id, department.name) for department in departments]
+    form.emp_dep.choices= [(0, "Select an employee department")] + [(department.id, department.name) for department in departments]
 
 @case_bp.route("/create", methods=["GET", "POST"])
 @login_required
@@ -105,7 +105,7 @@ def create_case():
             employee_name=form.emp_name.data.strip(),
             employee_id=form.emp_id.data,
             designation=form.emp_desig.data.strip(),
-            department=form.emp_dep.data.strip(),
+            department=selected_department.name,
             last_working_day=form.last_date.data,
             line_manager=form.line_manager.data.strip(),
             status="CREATED",
