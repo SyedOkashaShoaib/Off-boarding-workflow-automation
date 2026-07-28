@@ -6,7 +6,8 @@ from app.models import(
     ChecklistItem, 
     Department, 
     WorkflowPhase,
-    DepartmentEmployee,)
+    DepartmentEmployee,
+    EmployeeDepartment)
 
 
 @click.command("seed-data")
@@ -21,7 +22,7 @@ def seed_data_command():
 
     try:
         seed_departments()
-
+        created_employee_departments_count = seed_employee_departments()
         # Ensure newly added departments have database IDs before
         # workflow phases are created.
         db.session.flush()
@@ -51,6 +52,8 @@ def seed_data_command():
     click.echo("Seed data completed successfully.")
     click.echo("New department employees created: "
                f"{created_employee_count}")
+    click.echo("New employee deparmtents created: "
+               f"{created_employee_departments_count}")
     click.echo(
         f"New NOC checklist items created: {created_noc_items}"
     )
@@ -108,6 +111,21 @@ def seed_departments() -> None:
         else:
             department.email = department_data["email"]
             department.is_active = True
+
+def seed_employee_departments()->int:
+    department_names = [ "Administration", "Human Resorces", "Infromation Technology", "Marketing", "Quality Control",]
+    created_count = 0
+    for department_name in department_names:
+        department = (EmployeeDepartment.query.filter_by(name=department_name).first())
+        if department is None:
+            department= EmployeeDepartment(name=department_name, is_active=True)
+            
+            db.session.add(department)
+            created_count+=1
+        else:
+            department.is_active = True
+        
+    return created_count
 def seed_department_employees() -> int:
     """
     Insert or update prototype department employees.
