@@ -622,7 +622,7 @@ class ChecklistResponse(db.Model):
         db.DateTime(timezone=True),
         default=utc_now,
         nullable=False,
-    )
+    )   
 
     workflow_task = db.relationship(
         "WorkflowTask",

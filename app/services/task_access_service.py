@@ -139,7 +139,7 @@ def issue_task_access_grant(
     Generate and persist a new access grant.
 
     The caller receives the raw token once so it can be inserted
-    into the assignment email. Only the token hash is stored.
+    into the assignment email. Only the token hash is stored in the database.
     """
 
     cleaned_email = str(
