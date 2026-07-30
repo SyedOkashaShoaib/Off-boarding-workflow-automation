@@ -1,242 +1,63 @@
-6. WORKFLOW PROCESSING MECHANISM
+10.3 Entity Descriptions
 
-6.1 Case Initialization
+10.3.1 User
 
-NOC submits the new offboarding case form.
+The User entity stores accounts permitted to access the authenticated operations portal. Each user is identified by a unique email address and has a stored password hash, full name, authorization role, active status, login timestamp, and record timestamps. Supported roles include NOC_OPERATOR, FINAL_APPROVER, and SYSTEM_ADMIN. Passwords are stored as hashes rather than plaintext values. The entity does not contain foreign keys to other database tables because portal authorization is role-based rather than directly linked to workflow departments.
 
-Flask-WTF validates the submitted fields and CSRF token.
+10.3.2 Department
 
-The selected employee department is verified against the active department records.
+The Department entity represents departments that participate in the offboarding clearance workflow, such as NOC, MIS, Hardware, and Administration. Each department has a unique name, an email address used for workflow assignment and notification, and an active-status field. One department may contain multiple department employees and may be responsible for multiple workflow phases.
 
-A new OffboardingCase record is created.
+10.3.3 DepartmentEmployee
 
-The workflow phases are retrieved in their configured sequence.
+The DepartmentEmployee entity stores employees who may be selected as responsible for individual checklist responses. Each record belongs to one workflow department through department_id and contains a unique employee code, full name, and active status. The entity is connected to ChecklistResponse, allowing the system to record the specific departmental employee responsible for each clearance item.
 
-The first WorkflowTask is activated and assigned a due date.
+10.3.4 WorkflowPhase
 
-A secure task-access link and notification record are created.
+The WorkflowPhase entity defines the ordered stages through which an offboarding case progresses. Each phase belongs to one department and includes a name, unique slug, sequence number, optional description, active status, and an indicator specifying whether the phase represents final approval. A workflow phase may contain multiple checklist items and may be referenced by multiple workflow tasks.
 
-The case initialization is recorded in the audit history.
+10.3.5 ChecklistItem
 
+The ChecklistItem entity defines an individual clearance requirement belonging to a workflow phase. Each checklist item contains the requirement text, an optional section heading, display order, required-status indicator, and active-status indicator. The phase_id foreign key determines the workflow phase in which the item appears. One checklist item may be referenced by multiple checklist responses across different offboarding cases.
 
-6.2 Departmental Checklist Submission
+10.3.6 EmployeeDepartment
 
-The departmental user opens the secure task link received by email.
+The EmployeeDepartment entity stores the organizational departments of employees being offboarded, such as Finance, Sales, Human Resources, or Manufacturing. It is separate from the Department entity because it represents the employee’s home department rather than a department responsible for performing workflow clearance. Each name is unique and may be deactivated through the is_active field. The table does not have a foreign-key relationship with OffboardingCase; the selected department name is stored in the case as text.
 
-The system validates the access token, expiry time, and task status.
+10.3.7 OffboardingCase
 
-The checklist configured for the current workflow phase is displayed.
+The OffboardingCase entity is the central operational record in the database. It stores the case number, employee information, designation, organizational department, final working date, line manager, case status, creator, timestamps, and current workflow phase. The case_number field is unique, while current_phase_id references the phase currently responsible for processing the case.
 
-Each response and responsible departmental employee is validated.
+One offboarding case may contain multiple workflow tasks and audit-log records. The case also maintains created_at, updated_at, and closed_at timestamps to support lifecycle tracking.
 
-A reason is required when Not Applicable is selected.
+10.3.8 WorkflowTask
 
-Valid responses are stored as ChecklistResponse records.
+The WorkflowTask entity represents the execution of one workflow phase for one offboarding case. Each task belongs to an OffboardingCase and a WorkflowPhase through the case_id and phase_id foreign keys. It records the assigned email address, task status, assignment time, due time, opening time, and submission time.
 
-The current task is marked as completed.
+A unique constraint on case_id and phase_id ensures that the same workflow phase cannot generate more than one task for a particular case. One workflow task may contain multiple checklist responses, task-access grants, and email notifications.
 
-The workflow progression process is then started.
+10.3.9 ChecklistResponse
 
+The ChecklistResponse entity stores the submitted result for one checklist item within a workflow task. Each response references an offboarding case, workflow task, checklist item, and responsible department employee. It also records the response status, optional reason, submitting identity, and submission timestamp.
 
-6.3 Workflow Progression
+A unique constraint on workflow_task_id and checklist_item_id prevents the same checklist item from receiving more than one stored response within the same task.
 
-Workflow tasks follow the sequence defined by the configured phases.
+10.3.10 TaskAccessGrant
 
-Only the current departmental task is available for completion.
+The TaskAccessGrant entity supports secure, task-specific access for departments that do not use permanent portal accounts. Each grant belongs to one workflow task and records the SHA-256 hash of the access token, intended recipient email, expiration time, creation time, access count, most recent access time, consumption time, and revocation time.
 
-Completion of the current task activates the next workflow phase.
+The raw token sent through email is not stored in the database. The token_hash field is unique, and multiple historical grants may exist for one task when links are replaced, revoked, or consumed.
 
-A new secure link is generated for the next department.
+10.3.11 AuditLog
 
-The next assignment notification is created and sent.
+The AuditLog entity stores a chronological history of significant actions associated with an offboarding case. Each record references one case and contains an action identifier, the responsible actor, optional event details, and the event timestamp. Examples of recorded events include task creation, task opening, checklist submission, secure-link activation, notification delivery, final approval, and case closure.
 
-After the last departmental task, the case moves to final approval.
+An index on case_id and created_at supports efficient retrieval of a case’s audit history in chronological order.
 
+10.3.12 EmailNotification
 
-> [INFO] Workflow phases, checklist items, departments, and departmental employees must be configured before cases are processed.
+The EmailNotification entity records emails created and delivered during the workflow. Each notification is associated with both an offboarding case and a workflow task. It records the notification category, recipient email, subject, delivery status, optional deduplication key, provider message identifier, error details, creation time, attempt time, and successful sending time.
 
+The entity supports assignment emails, replacement secure-link emails, and overdue escalation messages. Its indexes support queries by case and delivery status, as well as by workflow task and notification type.
 
-
-6.4 Final Approval and Closure
-
-The final approver opens the completed case through the staff portal.
-
-The system confirms that all required departmental tasks are complete.
-
-The approver reviews the submitted checklist responses.
-
-An approval or rejection decision is recorded.
-
-Approval changes the case status to closed.
-
-The decision and completion time are recorded in the audit history.
-
-A rejected case remains available for further action according to the implemented workflow.
-
-
-
----
-
-7. SECURE TASK-LINK MECHANISM
-
-7.1 Link Generation
-
-A secure random token is generated when a departmental task becomes active.
-
-The raw token is included in the task URL sent to the department.
-
-Only a SHA-256 digest of the token is stored in the database.
-
-The access grant is linked to a specific workflow task.
-
-An expiry time is assigned according to the configured token lifetime.
-
-
-7.2 Link Validation
-
-When the task URL is opened, the system:
-
-extracts the token from the request;
-
-calculates its SHA-256 digest;
-
-searches for the corresponding TaskAccessGrant;
-
-verifies that the grant has not expired;
-
-checks that it has not been revoked;
-
-confirms that the associated task is still available;
-
-allows access only when all checks succeed.
-
-
-Invalid, expired, or revoked links are rejected and do not expose the departmental checklist.
-
-7.3 Link Reissue
-
-NOC may reissue a task link when the original link is lost, expired, or considered compromised.
-
-Existing active grants for the task are revoked.
-
-A new token and access grant are generated.
-
-A replacement notification is sent to the configured department address.
-
-The reissue action is recorded for audit purposes.
-
-
-> [SECURITY NOTE] The raw access token is not stored in the database and should not be displayed in logs, screenshots, or support documentation.
-
-
-
-
----
-
-8. EMAIL NOTIFICATION SYSTEM
-
-8.1 How Notifications Are Sent
-
-A notification record is created when a workflow task becomes active.
-
-The application prepares the relevant email content.
-
-A secure task link is included where departmental action is required.
-
-Delivery is attempted through the configured SMTP backend.
-
-The notification status is updated after the attempt.
-
-Delivery errors are stored for troubleshooting.
-
-Console mode may be used during local development instead of sending an external email.
-
-
-8.2 Notification Types
-
-Notification	Purpose
-
-Task assignment	Informs a department that its checklist is ready
-Next-phase assignment	Notifies the next department after workflow progression
-Replacement-link notification	Sends a newly issued secure task link
-Overdue escalation	Informs NOC that a task has passed its due date
-Final-approval notification	Indicates that the case is ready for final review
-
-
-8.3 Departmental Email Contents
-
-A departmental assignment email normally includes:
-
-case reference;
-
-assigned department or workflow phase;
-
-employee information required for identification;
-
-task due date;
-
-secure task link;
-
-brief completion instructions.
-
-
-8.4 Notification Tracking
-
-Status	Meaning
-
-Pending	Notification has been created but delivery is not yet confirmed
-Sent	SMTP delivery completed successfully
-Failed	Delivery was unsuccessful and an error was recorded
-
-
-> [NOTE] A failed email does not necessarily mean that the case or workflow task was not created. The case record, active task, access grant, and notification status should be checked separately.
-
-
-
-
----
-
-9. SECURITY IMPLEMENTATION
-
-9.1 Implemented Security Controls
-
-Security Control	Implementation
-
-Staff authentication	Flask-Login with email and password authentication
-Password protection	Passwords stored as secure hashes rather than plaintext
-Role-based authorization	Protected portal routes restricted by operational role
-Departmental access	Task-specific secure URLs instead of general portal access
-Token protection	Only SHA-256 token digests stored in the database
-Token expiry	Configurable expiry time for task-access links
-Token revocation	Existing grants can be invalidated during link reissue
-CSRF protection	Flask-WTF CSRF validation on state-changing forms
-Session protection	HTTP-only and SameSite cookie configuration
-Audit logging	Important case, access, workflow, and approval actions recorded
-Input validation	Form and server-side validation applied before database changes
-
-
-9.2 Access Boundaries
-
-NOC users access case creation, monitoring, and operational controls through the staff portal.
-
-Departmental users access only the task associated with their secure link.
-
-The final approver accesses completed cases requiring a decision.
-
-Unauthorized users are prevented from accessing protected routes or unrelated departmental tasks.
-
-
-9.3 Current Security Limitations
-
-Limitation	Required Production Action
-
-Prototype deployment environment	Complete infrastructure and security review
-Local SQLite database	Select and secure an approved production database
-No Active Directory or SSO integration	Evaluate organizational authentication integration
-Development server	Deploy through an approved production WSGI server
-No formal penetration test	Perform security testing before production release
-Environment-based secrets	Use approved secret-management and server controls
-HTTPS dependent on deployment	Configure TLS certificates and secure cookies in production
-
-
-> [WARNING] The application should not be described as production-secure until deployment architecture, HTTPS, backups, monitoring, access policies, and formal security testing have been completed.
+The next section is 10.4 Relationship Summary, which converts the ERD relationships into a concise written explanation.
