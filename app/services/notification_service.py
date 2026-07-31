@@ -245,6 +245,7 @@ def create_task_access_reissue_notification(
 
     This function does not deliver the notification and does not
     commit the database transaction.
+    Also im an unpaid intern and no one is ever going to open this.. : ( 
     """
 
     if task.phase.is_final_approval:
