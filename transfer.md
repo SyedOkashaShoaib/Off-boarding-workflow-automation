@@ -1,264 +1,84 @@
-from typing import Optional
-
-import click
-from flask.cli import with_appcontext
-from sqlalchemy.exc import (
-    IntegrityError,
-    SQLAlchemyError,
-)
-
-from app.extension import db
-from app.models import EmailNotification
-from app.services.notification_service import (
-    create_daily_task_reminder_notification,
-    deliver_task_assignment_notification,
-)
-from app.services.reminder_service import (
-    build_daily_task_reminder_key,
-    find_current_active_tasks,
-    find_existing_daily_task_reminder,
-)
-
-
-@click.command(
-    "send-daily-task-reminders"
-)
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    help=(
-        "Show which current tasks would receive reminders "
-        "without creating notifications, rotating tokens, "
-        "or sending email."
-    ),
-)
-@click.option(
-    "--task-id",
-    type=int,
-    default=None,
-    help=(
-        "Process only one workflow task while retaining all "
-        "normal active-task eligibility checks."
-    ),
-)
-@with_appcontext
-def send_daily_task_reminders_command(
-    dry_run: bool,
-    task_id: Optional[int],
-) -> None:
+def create_daily_task_reminder_notification(
+    *,
+    task: WorkflowTask,
+    deduplication_key: str,
+) -> EmailNotification:
     """
-    Send one daily reminder to the department responsible for
-    each currently active workflow task.
+    Create one pending daily reminder for the task that is
+    currently active for an offboarding case.
 
-    NOC reminders use authenticated portal links. MIS, Hardware,
-    and final Administration reminders receive newly generated
-    task-access links that replace previously issued links.
+    Delivery is performed separately. For token-authorized
+    departments, delivery generates a fresh access token and
+    revokes previously active grants.
     """
 
-    active_tasks = find_current_active_tasks(
-        task_id=task_id
-    )
+    recipient_email = str(
+        task.assigned_to_email or ""
+    ).strip().lower()
 
-    if not active_tasks:
-        click.echo(
-            "No current active workflow tasks were found."
-        )
-        return
-
-    click.echo(
-        (
-            f"Found {len(active_tasks)} current active "
-            "workflow task(s)."
-        )
-    )
-
-    if dry_run:
-        for task in active_tasks:
-            click.echo(
-                (
-                    f"[DRY RUN] Task {task.id} | "
-                    f"Case {task.case.case_number} | "
-                    f"Phase {task.phase.name} | "
-                    f"Department "
-                    f"{task.phase.department.name} | "
-                    f"Status {task.status} | "
-                    f"Recipient "
-                    f"{task.assigned_to_email}"
-                )
-            )
-
-        click.echo("")
-        click.echo(
+    if not recipient_email:
+        raise ValueError(
             (
-                "Dry run completed. No notifications were "
-                "created and no task-access tokens were rotated."
-            )
-        )
-        return
-
-    sent_count = 0
-    failed_count = 0
-    skipped_count = 0
-
-    for task in active_tasks:
-        deduplication_key = (
-            build_daily_task_reminder_key(
-                task
+                "The active workflow task does not have "
+                "a recipient email address."
             )
         )
 
-        notification = (
-            find_existing_daily_task_reminder(
-                deduplication_key
+    normalized_key = str(
+        deduplication_key or ""
+    ).strip()
+
+    if not normalized_key:
+        raise ValueError(
+            (
+                "A deduplication key is required for a "
+                "daily task reminder."
             )
         )
 
-        if (
-            notification is not None
-            and notification.status == "SENT"
-        ):
-            skipped_count += 1
+    if task.phase.is_final_approval:
+        subject = (
+            "Daily Reminder — Final Offboarding "
+            "Approval Required — "
+            f"{task.case.case_number}"
+        )
+    else:
+        subject = (
+            "Daily Reminder — Offboarding Action "
+            "Required — "
+            f"{task.case.case_number}"
+        )
 
-            click.echo(
-                (
-                    f"Skipped task {task.id}: today's "
-                    "reminder was already sent."
-                )
-            )
-
-            continue
-
-        if notification is None:
-            try:
-                notification = (
-                    create_daily_task_reminder_notification(
-                        task=task,
-                        deduplication_key=(
-                            deduplication_key
-                        ),
-                    )
-                )
-
-                # Store the pending reminder before delivery.
-                # This allows failures to be recorded and retried.
-                db.session.commit()
-
-            except IntegrityError:
-                # Another scheduler process may have created the
-                # same task-and-date reminder after our lookup.
-                db.session.rollback()
-
-                notification = (
-                    EmailNotification.query
-                    .filter_by(
-                        deduplication_key=(
-                            deduplication_key
-                        )
-                    )
-                    .first()
-                )
-
-                if notification is None:
-                    failed_count += 1
-
-                    click.echo(
-                        (
-                            f"Failed task {task.id}: the daily "
-                            "reminder deduplication conflict "
-                            "could not be resolved."
-                        ),
-                        err=True,
-                    )
-
-                    continue
-
-                if notification.status == "SENT":
-                    skipped_count += 1
-
-                    click.echo(
-                        (
-                            f"Skipped task {task.id}: today's "
-                            "reminder was sent by another "
-                            "process."
-                        )
-                    )
-
-                    continue
-
-            except (
-                SQLAlchemyError,
-                ValueError,
-            ) as exc:
-                db.session.rollback()
-                failed_count += 1
-
-                click.echo(
-                    (
-                        "Failed to queue a daily reminder for "
-                        f"task {task.id}: {exc}"
-                    ),
-                    err=True,
-                )
-
-                continue
-
-        try:
-            result = (
-                deliver_task_assignment_notification(
-                    notification
-                )
-            )
-
-            db.session.commit()
-
-        except SQLAlchemyError as exc:
-            db.session.rollback()
-            failed_count += 1
-
-            click.echo(
-                (
-                    f"Delivery was attempted for task "
-                    f"{task.id}, but the result could not "
-                    f"be saved: {exc}"
-                ),
-                err=True,
-            )
-
-            continue
-
-        if result.success:
-            sent_count += 1
-
-            click.echo(
-                (
-                    "Sent daily reminder for task "
-                    f"{task.id} to "
-                    f"{notification.recipient_email}."
-                )
-            )
-
-        else:
-            failed_count += 1
-
-            click.echo(
-                (
-                    "Failed daily reminder for task "
-                    f"{task.id}: "
-                    f"{result.error_message or 'Unknown error'}"
-                ),
-                err=True,
-            )
-
-    click.echo("")
-    click.echo(
-        "Daily task-reminder processing completed."
+    notification = EmailNotification(
+        case=task.case,
+        workflow_task=task,
+        notification_type=(
+            DAILY_TASK_REMINDER_NOTIFICATION_TYPE
+        ),
+        deduplication_key=normalized_key,
+        recipient_email=recipient_email,
+        subject=subject,
+        status="PENDING",
     )
-    click.echo(
-        f"Sent: {sent_count}"
+
+    db.session.add(
+        notification
     )
-    click.echo(
-        f"Failed: {failed_count}"
+
+    db.session.add(
+        AuditLog(
+            case=task.case,
+            action="DAILY_REMINDER_QUEUED",
+            performed_by="System",
+            details=(
+                "A daily reminder was queued for "
+                f"workflow task {task.id}. "
+                f"Department: "
+                f"{task.phase.department.name}. "
+                f"Recipient: "
+                f"'{recipient_email}'."
+            ),
+        )
     )
-    click.echo(
-        f"Skipped: {skipped_count}"
-    )
+
+    return notification
